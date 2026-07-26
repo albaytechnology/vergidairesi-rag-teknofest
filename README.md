@@ -10,24 +10,71 @@ Kullanıcılar doğal dille soru sorar; sistem üç senaryoyu destekler:
 
 Her cevap kaynak atıflıdır; dayanak yoksa sistem **"Bu bilgi dokümanlarda bulunamadı"** der.
 
-## Mimari
+## Mimari ve Akışlar
 
+### 1. Veri Akışı — dosyadan Qdrant + Postgres'e (indeksleme hattı)
+
+```mermaid
+flowchart TD
+    A["📁 Doküman klasörü<br/>pdf · docx · xlsx · pptx · txt · md"]
+    A -->|"pnpm ingest — enqueue.ts"| B["Klasörü tara<br/>jobId = sha1(path) → tekrarsız"]
+    B --> C[("Redis<br/>BullMQ 'parse' kuyruğu<br/>3 deneme, exp. backoff")]
+    C -->|"pnpm worker — worker.ts"| D["Dosyayı oku<br/>sha256 içerik hash'i"]
+    D --> E{"Hash değişmiş mi?<br/>(documents.hash)"}
+    E -->|"hayır"| SKIP["atla — değişmemiş"]
+    E -->|"evet"| F{"Dosya tipi?"}
+    F -->|"txt / md"| G["Doğrudan oku<br/>(Docling'e gerek yok)"]
+    F -->|"pdf / docx / xlsx / pptx"| H["Docling :5001<br/>POST /v1/convert/file<br/>docling.ts"]
+    H -->|"hata → 3 deneme → failed"| FAIL[("documents<br/>status=failed + sebep")]
+    H --> I["Markdown + yapısal JSON<br/>(prov.page_no sayfa haritası)"]
+    G --> J["data/parsed/&lt;id&gt;.md (+ .json)"]
+    I --> J
+    J --> K[("Postgres — documents<br/>status=parsed<br/>path · hash · format")]
+
+    K -->|"pnpm chunk — chunk-all.ts"| L["chunker.ts<br/>H1/H2 = bölüm sınırı · tablo bölünmez<br/>breadcrumb enjeksiyonu · ~650 token hedef<br/>pagemap.ts: chunk → sayfa no"]
+    L --> M[("Postgres — chunks<br/>child (arama) + parent (bağlam)<br/>transaction ile replace")]
+
+    M -->|"pnpm classify — classify-all.ts"| N["Qwen (uzak Ollama)<br/>structured JSON: docType · entities<br/>summary · containsPII · confidence"]
+    N --> K2[("Postgres — documents<br/>metadata güncellenir<br/>güven &lt; 0.6 → needs_review")]
+
+    M -->|"pnpm embed — embed-all.ts"| O["16'lık batch:<br/>bge-m3 dense (1024) — ollama.ts<br/>+ BM25 sparse — sparse.ts (TR tokenizer)"]
+    O --> P[("Qdrant — albay_chunks<br/>dense + sparse vektör<br/>payload: doc_type · contains_pii<br/>entities · page · parent_id · text")]
+    O -->|"markEmbedded"| M
 ```
- dosyalar → pnpm ingest → Redis kuyruğu → worker → Docling (parse)
-                                            │
-                              Postgres (documents) + data/parsed/*.md|json
-                                            │
-          pnpm chunk (yapısal chunker) → chunks tablosu
-          pnpm classify (Qwen: docType/entities/PII) → documents metadata
-          pnpm embed (bge-m3 dense + BM25 sparse) → Qdrant (hybrid)
 
- soru → LangGraph.js Supervisor Graph
-          Router (niyet tespiti)
-            ├─ chitchat ────────────────────────→ cevap
-            └─ retrieve (hybrid RRF + opsiyonel rerank)
-                 ├─ entity   → EntityAgent ─────→ Grader ─┐
-                 ├─ doc_find → DocFinderAgent ──→ SON     │ ret → sorgu yeniden yaz
-                 └─ synthesis→ SynthesisAgent ──→ Grader ─┘ → 1 retry → "bulunamadı"
+### 2. Sorgu Akışı — kullanıcı sorusundan cevaba (LangGraph.js graph'ı)
+
+```mermaid
+flowchart TD
+    Q["👤 pnpm sor 'soru' — ask-cli.ts<br/>→ ask() — graph.ts"]
+    Q --> R["🧭 routerNode (Qwen, JSON)<br/>intent · entity · searchQuery"]
+    R -->|"chitchat"| CC["chitchatNode<br/>kısa sohbet cevabı"]
+    CC --> ANS
+
+    R -->|"entity / doc_find / synthesis"| RET["retrieveNode → hybridSearch()<br/>search.ts"]
+
+    subgraph HS["Hybrid Arama — packages/retrieval"]
+        RET --> E1["Sorguyu embed et<br/>bge-m3 dense"]
+        RET --> E2["Sparse encode<br/>BM25 + TR tokenizer"]
+        E1 --> QD[("Qdrant Query API<br/>prefetch dense + sparse<br/>→ RRF füzyonu")]
+        E2 --> QD
+        QD --> RR{"RERANKER_URL<br/>tanımlı mı?"}
+        RR -->|"evet"| RE["TEI bge-reranker-v2-m3<br/>cross-encoder sıralama"]
+        RR -->|"hayır"| TOPK
+        RE --> TOPK["top-K parça<br/>(entity: 10 · doc_find: 12 · synthesis: 8)"]
+    end
+
+    TOPK -->|"intent=entity"| EA["🧑 entityNode<br/>önce entity filtresi, azsa genel arama<br/>yapılandırılmış kişi/varlık özeti"]
+    TOPK -->|"intent=doc_find"| DF["📄 docFinderNode<br/>doküman düzeyinde grupla<br/>liste GERÇEK sonuçlardan — LLM sadece açıklar"]
+    TOPK -->|"intent=synthesis"| SY["📝 synthesisNode<br/>kaynaklı sentez cevap [1][2] atıflı"]
+
+    DF --> ANS["✅ Cevap + Kaynaklar + trace"]
+    EA --> GR{"🔍 graderNode (Qwen, JSON)<br/>cevap parçalara dayanıyor mu?<br/>'bilgi yok' cevabı → denetimsiz geç"}
+    SY --> GR
+    GR -->|"onay (grounded)"| ANS
+    GR -->|"ret + retry &lt; 1<br/>sorguyu yeniden yaz"| RET
+    GR -->|"ret + retry = 1"| NF["❌ 'Bu bilgi dokümanlarda<br/>bulunamadı.'"]
+    NF --> ANS
 ```
 
 ## Stack
