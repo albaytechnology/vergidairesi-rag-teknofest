@@ -14,7 +14,11 @@ import {
   setStatus,
   pool,
 } from "@albay/ingestion";
-import { makeRedis, PARSE_QUEUE, type ParseJobData } from "./queue.ts";
+import {
+  createRedisConnection,
+  PARSE_QUEUE,
+  type ParseJobData,
+} from "./helpers/redis.ts";
 
 const OUTPUT_DIR = join(process.cwd(), "data", "parsed");
 await mkdir(OUTPUT_DIR, { recursive: true });
@@ -75,7 +79,7 @@ async function processFile(job: Job<ParseJobData>): Promise<string> {
   }
 }
 
-const connection = makeRedis();
+const connection = await createRedisConnection();
 const worker = new Worker<ParseJobData>(PARSE_QUEUE, processFile, {
   connection,
   concurrency: 2, // Docling agir — ayni anda 2 dosya yeterli
