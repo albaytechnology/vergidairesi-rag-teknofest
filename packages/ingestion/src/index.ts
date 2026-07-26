@@ -1,0 +1,20 @@
+export { DoclingClient, type DoclingResult } from "./docling.ts";
+export {
+  pool,
+  migrate,
+  upsertDocument,
+  setStatus,
+  statusCounts,
+  replaceChunks,
+  chunkCounts,
+  docsToClassify,
+  saveClassification,
+  chunksToEmbed,
+  markEmbedded,
+  resetEmbeddings,
+  type ChunkInsert,
+  type ChunkToEmbed,
+  type DocToClassify,
+  type DocumentRow,
+  type DocStatus,
+} from "./db.ts";

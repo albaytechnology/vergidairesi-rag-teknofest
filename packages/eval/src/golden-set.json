@@ -1,0 +1,77 @@
+{
+  "$comment": "Golden test seti — mevcut 3 dokumanlik pilot korpusa gore. Korpus buyudukce soru ekle: hedef senaryo basina 15-25 + 10-15 tuzak.",
+  "questions": [
+    {
+      "id": "ent-001",
+      "scenario": "entity",
+      "question": "Altay Şimşek hakkındaki bilgileri getir",
+      "expectedDocs": ["ALB-AI_Teknofest_Takım_Tanıtım"],
+      "expectedAnswerContains": [],
+      "notes": "Takim tanitiminda gecen kisi — iki tanitim dosyasindan biri kaynak gosterilmeli"
+    },
+    {
+      "id": "ent-002",
+      "scenario": "entity",
+      "question": "AI Committee nedir ve ne yapar?",
+      "expectedDocs": ["Albay_Intelligence_Hub_Process_Document.pdf"],
+      "expectedAnswerContains": [],
+      "notes": "Prosedur dokumanindaki kurum/organ"
+    },
+    {
+      "id": "doc-001",
+      "scenario": "doc_find",
+      "question": "Albay Intelligence Hub süreç dokümanını bul",
+      "expectedDocs": ["Albay_Intelligence_Hub_Process_Document.pdf"],
+      "expectedAnswerContains": [],
+      "notes": ""
+    },
+    {
+      "id": "doc-002",
+      "scenario": "doc_find",
+      "question": "Teknofest takım tanıtımıyla ilgili dosyaları bul",
+      "expectedDocs": ["ALB-AI_Teknofest_Takım_Tanıtım"],
+      "expectedAnswerContains": [],
+      "notes": "Hem pdf hem pptx var — en az biri kaynakta gecmeli"
+    },
+    {
+      "id": "syn-001",
+      "scenario": "synthesis",
+      "question": "Albay Intelligence Hub süreci nasıl işliyor, adım adım anlat",
+      "expectedDocs": ["Albay_Intelligence_Hub_Process_Document.pdf"],
+      "expectedAnswerContains": [],
+      "notes": ""
+    },
+    {
+      "id": "syn-002",
+      "scenario": "synthesis",
+      "question": "ALB-AI takımı Teknofest'te hangi projeyle yarışıyor?",
+      "expectedDocs": ["ALB-AI_Teknofest_Takım_Tanıtım"],
+      "expectedAnswerContains": [],
+      "notes": ""
+    },
+    {
+      "id": "trap-001",
+      "scenario": "trap",
+      "question": "Şirketin 2019 yılındaki Mars kolonisi projesinin bütçesi neydi?",
+      "expectedDocs": [],
+      "expectedAnswerContains": [],
+      "notes": "Tuzak — dogru davranis 'dokumanlarda bulunamadi'"
+    },
+    {
+      "id": "trap-002",
+      "scenario": "trap",
+      "question": "Opel araç kiralama sözleşmesinin aylık bedeli ne kadar?",
+      "expectedDocs": [],
+      "expectedAnswerContains": [],
+      "notes": "Tuzak — korpusta sozlesme yok; sistem uydurmamali"
+    },
+    {
+      "id": "trap-003",
+      "scenario": "trap",
+      "question": "Ayşe Yılmaz'ın işe giriş tarihi nedir?",
+      "expectedDocs": [],
+      "expectedAnswerContains": [],
+      "notes": "Tuzak — boyle bir kisi korpusta yok"
+    }
+  ]
+}

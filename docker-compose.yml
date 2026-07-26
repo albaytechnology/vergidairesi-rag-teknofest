@@ -1,0 +1,69 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: albay-rag-qdrant
+    ports:
+      - "6333:6333"   # REST
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: albay-rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: albay-rag-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: albay
+      POSTGRES_PASSWORD: albay_dev_pw
+      POSTGRES_DB: albay_rag
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  docling:
+    image: ghcr.io/docling-project/docling-serve:latest
+    container_name: albay-rag-docling
+    ports:
+      - "5001:5001"
+    environment:
+      DOCLING_SERVE_ENABLE_UI: "true"
+    restart: unless-stopped
+
+  # Reranker (bge-reranker-v2-m3, TEI — CPU). Ilk acilista modeli indirir (~2GB).
+  #
+  # DIKKAT: TEI imaji arm64 (Apple Silicon) desteklemiyor — bu yuzden "rerank"
+  # profili arkasinda. Varsayilan `docker compose up -d` bunu BASLATMAZ.
+  # x86 Linux makinede (5090 is istasyonu / uzak sunucu) calistirmak icin:
+  #   docker compose --profile rerank up -d
+  # Reranker yokken sistem calisir; arama sadece RRF sirasini kullanir
+  # (.env'de RERANKER_URL bos birakilmali).
+  #
+  # NOT: air-gapped kuruluma gecerken model onceden indirilip volume'a konmali.
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    container_name: albay-rag-reranker
+    profiles: ["rerank"]
+    ports:
+      - "8080:80"
+    command: ["--model-id", "BAAI/bge-reranker-v2-m3"]
+    volumes:
+      - reranker_data:/data
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+  redis_data:
+  pg_data:
+  reranker_data:

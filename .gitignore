@@ -1,0 +1,33 @@
+# Bagimliliklar
+node_modules/
+.pnpm-store/
+
+# Ortam degiskenleri — asla commit etme (KVKK / gizli anahtarlar)
+.env
+.env.local
+.env.*.local
+
+# Derleme ciktilari
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+
+# Test / coverage
+coverage/
+
+# Veri ve loglar (korpus dokumanlarini repoya koyma!)
+data/
+uploads/
+*.log
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Docker volume yedekleri vb.
+*.dump
+*.sql.gz

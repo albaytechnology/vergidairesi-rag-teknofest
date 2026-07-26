@@ -1,0 +1,12 @@
+{
+  "name": "@albay/retrieval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@albay/llm": "workspace:*",
+    "@albay/shared": "workspace:*",
+    "@qdrant/js-client-rest": "^1.13.0"
+  }
+}

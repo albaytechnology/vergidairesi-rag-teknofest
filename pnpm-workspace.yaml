@@ -1,0 +1,6 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+allowBuilds:
+  esbuild: false
+  msgpackr-extract: false

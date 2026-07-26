@@ -1,0 +1,27 @@
+{
+  "name": "albay-rag",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx packages/eval/src/smoke-test.ts",
+    "eval": "tsx packages/eval/src/run-eval.ts",
+    "migrate": "tsx packages/ingestion/src/migrate.ts",
+    "worker": "tsx apps/ingestion-worker/src/worker.ts",
+    "ingest": "tsx apps/ingestion-worker/src/enqueue.ts",
+    "ingest:status": "tsx apps/ingestion-worker/src/status.ts",
+    "docs": "tsx apps/ingestion-worker/src/docs-list.ts",
+    "chunk": "tsx apps/ingestion-worker/src/chunk-all.ts",
+    "chunk:preview": "tsx apps/ingestion-worker/src/chunk-preview.ts",
+    "classify": "tsx apps/ingestion-worker/src/classify-all.ts",
+    "embed": "tsx apps/ingestion-worker/src/embed-all.ts",
+    "ara": "tsx apps/ingestion-worker/src/search-cli.ts",
+    "sor": "tsx apps/ingestion-worker/src/ask-cli.ts",
+    "test": "node --import tsx --test packages/*/test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@albay/eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@albay/agents": "workspace:*",
+    "@albay/llm": "workspace:*",
+    "@albay/retrieval": "workspace:*",
+    "@albay/shared": "workspace:*",
+    "@qdrant/js-client-rest": "^1.13.0",
+    "ioredis": "^5.4.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0"
+  }
+}

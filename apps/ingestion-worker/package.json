@@ -1,0 +1,16 @@
+{
+  "name": "@albay/ingestion-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@albay/agents": "workspace:*",
+    "@albay/chunking": "workspace:*",
+    "@albay/ingestion": "workspace:*",
+    "@albay/llm": "workspace:*",
+    "@albay/retrieval": "workspace:*",
+    "@albay/shared": "workspace:*",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.0"
+  }
+}
