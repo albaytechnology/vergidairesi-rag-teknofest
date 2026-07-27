@@ -37,7 +37,13 @@ export function createParseQueue(connection: Redis): Queue<ParseJobData> {
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
-      removeOnComplete: { count: 1000 },
+      // jobId = sha1(path) oldugu icin bitmis bir is Redis'te durdugu surece
+      // ayni dosya bir daha kuyruga giremiyor. Icerik degisti mi karari
+      // worker'daki documents.hash kontrolune ait; kuyruk seviyesindeki
+      // tekrar engeli yalnizca "bu is halen bekliyor" durumu icin anlamli.
+      removeOnComplete: true,
+      // Hata ayiklama icin basarisizlar tutulur; enqueue.ts bunlari yeniden
+      // ingest sirasinda silip tekrar deniyor, yani kalici tikanma olusmaz.
       removeOnFail: { count: 5000 },
     },
   });
