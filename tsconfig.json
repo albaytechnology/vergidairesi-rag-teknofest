@@ -19,8 +19,13 @@
       "@albay/ingestion": ["packages/ingestion/src/index.ts"],
       "@albay/chunking": ["packages/chunking/src/index.ts"],
       "@albay/retrieval": ["packages/retrieval/src/index.ts"],
-      "@albay/agents": ["packages/agents/src/index.ts"]
+      "@albay/agents": ["packages/agents/src/index.ts"],
+      "@albay/letter": ["packages/letter/src/index.ts"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "apps/*/src/**/*.ts"]
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "apps/*/src/**/*.ts"],
+  // apps/web tarayici kodu: DOM lib'i, JSX ve kendi tsconfig'i var.
+  // Kok yapilandirma node hedefli oldugu icin buraya karistirilmaz;
+  // `pnpm typecheck` web'in kendi tsc'sini ayrica calistirir.
+  "exclude": ["apps/web"]
 }

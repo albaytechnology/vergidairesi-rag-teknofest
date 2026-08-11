@@ -6,6 +6,7 @@
   "main": "src/index.ts",
   "dependencies": {
     "@albay/agents": "workspace:*",
+    "@albay/letter": "workspace:*",
     "@albay/llm": "workspace:*",
     "@albay/retrieval": "workspace:*",
     "@albay/shared": "workspace:*",

@@ -14,10 +14,11 @@ import { agentTarget } from "./targets/agent.ts";
 
 interface GoldenQuestion {
   id: string;
-  scenario: "entity" | "doc_find" | "synthesis" | "trap";
+  scenario: "entity" | "doc_find" | "synthesis" | "service_routing" | "trap";
   question: string;
   expectedDocs: string[];
   expectedAnswerContains: string[];
+  expectedAnswerNotContains?: string[];
   notes?: string;
 }
 
@@ -49,6 +50,8 @@ interface QuestionResult {
   scenario: string;
   sourceHit: boolean | null;
   trapPassed: boolean | null;
+  answerHit: boolean | null;
+  forbiddenHit: boolean | null;
   answerSnippet: string;
 }
 
@@ -69,12 +72,26 @@ for (const q of golden.questions) {
 
     // Tuzak: sistem "bilmiyorum" diyebildi mi? (genis kalip listesi, TR-normalize)
     const trapPassed = q.scenario === "trap" ? isNotFoundAnswer(answer) : null;
+    const answerHit =
+      q.expectedAnswerContains.length === 0
+        ? null
+        : q.expectedAnswerContains.every((s) =>
+            answer.toLocaleLowerCase("tr-TR").includes(s.toLocaleLowerCase("tr-TR")),
+          );
+    const forbiddenHit =
+      q.expectedAnswerNotContains && q.expectedAnswerNotContains.length
+        ? q.expectedAnswerNotContains.some((s) =>
+            answer.toLocaleLowerCase("tr-TR").includes(s.toLocaleLowerCase("tr-TR")),
+          )
+        : null;
 
     rows.push({
       id: q.id,
       scenario: q.scenario,
       sourceHit,
       trapPassed,
+      answerHit,
+      forbiddenHit,
       answerSnippet: answer.slice(0, 80).replace(/\n/g, " "),
     });
     console.log(`  ${q.id} tamamlandi`);
@@ -84,6 +101,8 @@ for (const q of golden.questions) {
       scenario: q.scenario,
       sourceHit: false,
       trapPassed: q.scenario === "trap" ? false : null,
+      answerHit: q.expectedAnswerContains.length ? false : null,
+      forbiddenHit: null,
       answerSnippet: `HATA: ${(err as Error).message}`,
     });
     console.log(`  ${q.id} HATA: ${(err as Error).message}`);
@@ -101,12 +120,24 @@ const trapRate =
   traps.length === 0
     ? 0
     : traps.filter((r) => r.trapPassed).length / traps.length;
+const answerChecks = rows.filter((r) => r.answerHit !== null);
+const answerRate =
+  answerChecks.length === 0
+    ? 0
+    : answerChecks.filter((r) => r.answerHit).length / answerChecks.length;
+const forbiddenChecks = rows.filter((r) => r.forbiddenHit !== null);
+const forbiddenRate =
+  forbiddenChecks.length === 0
+    ? 1
+    : forbiddenChecks.filter((r) => !r.forbiddenHit).length / forbiddenChecks.length;
 
 console.log("\n─── Eval Sonuclari ───────────────────────────────────");
 for (const r of rows) {
   const flags = [
     r.sourceHit === null ? "" : r.sourceHit ? "kaynak✓" : "kaynak✗",
     r.trapPassed === null ? "" : r.trapPassed ? "tuzak✓" : "tuzak✗",
+    r.answerHit === null ? "" : r.answerHit ? "cevap✓" : "cevap✗",
+    r.forbiddenHit === null ? "" : r.forbiddenHit ? "yasak✗" : "yasak✓",
   ]
     .filter(Boolean)
     .join(" ");
@@ -115,4 +146,6 @@ for (const r of rows) {
 console.log("──────────────────────────────────────────────────────");
 console.log(`Dogru kaynak orani : ${(sourceRecall * 100).toFixed(1)}% (hedef ≥ 90%)`);
 console.log(`Tuzak basarisi     : ${(trapRate * 100).toFixed(1)}% (hedef ≥ 98%)`);
+console.log(`Beklenen cevap     : ${(answerRate * 100).toFixed(1)}%`);
+console.log(`Yasak ifade kontrol: ${(forbiddenRate * 100).toFixed(1)}%`);
 console.log(`\nBu skorlari kaydet — her fazin sonunda ayni komutla karsilastiracagiz.`);

@@ -1,0 +1,12 @@
+{
+  "name": "@albay/letter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@albay/shared": "workspace:*",
+    "docx": "^9.5.1",
+    "playwright": "^1.56.0"
+  }
+}

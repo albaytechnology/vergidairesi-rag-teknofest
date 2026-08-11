@@ -21,6 +21,7 @@ export interface SearchHit {
   section: string | null;
   page: number | null;
   parentId: string | null;
+  metadata: Record<string, unknown>;
   text: string;
 }
 
@@ -32,6 +33,7 @@ export interface SearchOptions {
   filters?: SearchFilters;
   /** Reranker'i devre disi birak (RERANKER_URL tanimli olsa bile) */
   skipRerank?: boolean;
+  collection?: string;
 }
 
 const ollama = new OllamaClient();
@@ -58,13 +60,19 @@ export async function hybridSearch(
   query: string,
   opts: SearchOptions = {},
 ): Promise<SearchHit[]> {
-  const { candidates = 30, topK = 8, filters, skipRerank = false } = opts;
+  const {
+    candidates = 30,
+    topK = 8,
+    filters,
+    skipRerank = false,
+    collection = config.QDRANT_COLLECTION,
+  } = opts;
 
   const [denseVec] = await ollama.embed([query]);
   const sparseVec = encodeSparse(query);
   const filter = buildFilter(filters);
 
-  const res = await client.query(config.QDRANT_COLLECTION, {
+  const res = await client.query(collection, {
     prefetch: [
       { query: denseVec!, using: "dense", limit: candidates, filter },
       {
@@ -91,6 +99,7 @@ export async function hybridSearch(
       section: (pl.section as string) ?? null,
       page: (pl.page as number) ?? null,
       parentId: (pl.parent_id as string) ?? null,
+      metadata: (pl.metadata as Record<string, unknown>) ?? {},
       text: String(pl.text ?? ""),
     };
   });

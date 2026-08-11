@@ -1,9 +1,11 @@
 import { StateGraph, Annotation, START, END } from "@langchain/langgraph";
 import { OllamaClient } from "@albay/llm";
+import { config, type ServiceRoutingDecision } from "@albay/shared";
 import { hybridSearch, type SearchHit } from "@albay/retrieval";
 import {
   ROUTER_PROMPT,
   ROUTER_SCHEMA,
+  ROUTING_NOT_DETERMINED,
   ENTITY_PROMPT,
   DOCFINDER_PROMPT,
   SYNTHESIS_PROMPT,
@@ -14,6 +16,13 @@ import {
   NOT_FOUND_ANSWER,
   isNotFoundAnswer,
 } from "./prompts.ts";
+import { buildContext, uniqueSources } from "./context.ts";
+import {
+  routeOnce,
+  gradeRouting,
+  formatRoutingDecision,
+  sameService,
+} from "./routing.ts";
 
 const ollama = new OllamaClient();
 
@@ -21,13 +30,19 @@ const ollama = new OllamaClient();
 
 const AgentState = Annotation.Root({
   question: Annotation<string>,
-  intent: Annotation<"entity" | "doc_find" | "synthesis" | "chitchat">,
+  intent: Annotation<"entity" | "doc_find" | "synthesis" | "service_routing" | "chitchat">,
   entity: Annotation<string | null>,
   searchQuery: Annotation<string>,
   hits: Annotation<SearchHit[]>,
   answer: Annotation<string>,
   sources: Annotation<string[]>,
   retries: Annotation<number>,
+  routingDecision: Annotation<ServiceRoutingDecision | null>,
+  /** Grader'in dayanaksiz buldugu servisler — ikinci denemede tekrar onerilmemeli. */
+  rejectedServices: Annotation<string[]>({
+    reducer: (a, b) => [...new Set([...(a ?? []), ...b])],
+    default: () => [],
+  }),
   graderDecision: Annotation<"pass" | "retry" | "fail" | null>,
   trace: Annotation<string[]>({
     reducer: (a, b) => [...(a ?? []), ...b],
@@ -38,19 +53,6 @@ const AgentState = Annotation.Root({
 export type AgentStateType = typeof AgentState.State;
 
 // ─── Yardimcilar ──────────────────────────────────────────────────────
-
-function buildContext(hits: SearchHit[]): string {
-  return hits
-    .map(
-      (h, i) =>
-        `--- Parca ${i + 1} (${h.filename}${h.page != null ? `, s.${h.page}` : ""}) ---\n${h.text}`,
-    )
-    .join("\n\n");
-}
-
-function uniqueSources(hits: SearchHit[]): string[] {
-  return [...new Set(hits.map((h) => h.filename))];
-}
 
 // ─── Node'lar ─────────────────────────────────────────────────────────
 
@@ -101,6 +103,79 @@ async function retrieveNode(state: AgentStateType) {
   return {
     hits,
     trace: [`retrieve → ${hits.length} parca (sorgu: "${state.searchQuery}")`],
+  };
+}
+
+async function routingNode(state: AgentStateType) {
+  const { decision, hits, trace } = await routeOnce({
+    metin: state.question,
+    aramaSorgusu: state.searchQuery,
+    elenenServisler: state.rejectedServices,
+  });
+
+  return {
+    hits,
+    routingDecision: decision,
+    answer: formatRoutingDecision(decision, hits),
+    // Karar dayanaksizsa kaynak gostermek yaniltici olur — bos birak.
+    sources: decision.belirlenemedi ? [] : uniqueSources(hits),
+    trace,
+  };
+}
+
+/**
+ * Yonlendirme kararinin grounding denetimi. Madde atiflari zaten routingNode'da
+ * deterministik dogrulandi; burada LLM'e SERVIS GOREV TANIMI eslesmesi sorulur.
+ */
+async function routingGrader(state: AgentStateType) {
+  const decision = state.routingDecision;
+  if (!decision || decision.belirlenemedi || state.answer.startsWith(ROUTING_NOT_DETERMINED)) {
+    return {
+      graderDecision: "pass" as const,
+      trace: ["grader → 'belirlenemedi' karari, dogru davranis olarak gecildi"],
+    };
+  }
+
+  const verdict = await gradeRouting({
+    metin: state.question,
+    decision,
+    hits: state.hits,
+    kararMetni: state.answer,
+  });
+
+  if (verdict.onaylandi) {
+    return {
+      graderDecision: "pass" as const,
+      trace: [`grader → yonlendirme onaylandi (${verdict.reason})`],
+    };
+  }
+
+  const reddedilen = decision.servis ? [decision.servis] : [];
+
+  // Bir kez daha dene — reddedilen servisi bu kez elemeye alarak
+  if (state.retries < 1) {
+    const newQuery = await ollama.chat([
+      { role: "system", content: REWRITE_PROMPT },
+      { role: "user", content: `Soru: ${state.question}\nEski sorgu: ${state.searchQuery}` },
+    ]);
+    return {
+      retries: state.retries + 1,
+      searchQuery: newQuery.trim().replace(/^["']|["']$/g, ""),
+      rejectedServices: reddedilen,
+      graderDecision: "retry" as const,
+      trace: [
+        `grader → ${decision.servis ?? "karar"} reddedildi (${verdict.reason});` +
+          " sorgu yeniden yazildi, servis elendi",
+      ],
+    };
+  }
+  return {
+    answer: `${ROUTING_NOT_DETERMINED}\n\nGerekce: ${verdict.reason}`,
+    sources: [],
+    routingDecision: null,
+    rejectedServices: reddedilen,
+    graderDecision: "fail" as const,
+    trace: [`grader → ikinci deneme de reddedildi (${verdict.reason}); 'belirlenemedi' donuldu`],
   };
 }
 
@@ -178,6 +253,10 @@ async function chitchatNode(state: AgentStateType) {
 }
 
 async function graderNode(state: AgentStateType) {
+  // Yonlendirme kararlarinin denetimi farkli: madde atiflari deterministik
+  // dogrulandi, kalan soru servis gorev tanimi eslesmesi.
+  if (state.intent === "service_routing") return routingGrader(state);
+
   // Cevap zaten "bilgi yok" diyorsa (herhangi bir kalipta) denetime gerek yok —
   // uydurma riski yok, dogru davranis bu.
   if (isNotFoundAnswer(state.answer)) {
@@ -234,6 +313,7 @@ async function graderNode(state: AgentStateType) {
 
 function routeByIntent(state: AgentStateType): string {
   if (state.intent === "chitchat") return "chitchat";
+  if (state.intent === "service_routing") return "routing";
   return "retrieve";
 }
 
@@ -249,13 +329,17 @@ function routeAfterRetrieve(state: AgentStateType): string {
 }
 
 function routeAfterGrader(state: AgentStateType): string {
-  return state.graderDecision === "retry" ? "retry" : END;
+  if (state.graderDecision !== "retry") return END;
+  // Yonlendirme ayri koleksiyonda arar — retry'i retrieve'e degil routing'e dondur,
+  // aksi halde ikinci deneme yanlis korpusta ve yanlis node'da biter.
+  return state.intent === "service_routing" ? "retry_routing" : "retry";
 }
 
 export function buildGraph() {
   const g = new StateGraph(AgentState)
     .addNode("router", routerNode)
     .addNode("retrieve", retrieveNode)
+    .addNode("routing", routingNode)
     .addNode("entity_agent", entityNode)
     .addNode("docfinder", docFinderNode)
     .addNode("synthesis", synthesisNode)
@@ -264,6 +348,7 @@ export function buildGraph() {
     .addEdge(START, "router")
     .addConditionalEdges("router", routeByIntent, {
       chitchat: "chitchat",
+      routing: "routing",
       retrieve: "retrieve",
     })
     .addConditionalEdges("retrieve", routeAfterRetrieve, {
@@ -273,10 +358,12 @@ export function buildGraph() {
     })
     .addEdge("entity_agent", "grader")
     .addEdge("synthesis", "grader")
+    .addEdge("routing", "grader")
     .addEdge("docfinder", END) // liste gercek sonuclardan — grader'a gerek yok
     .addEdge("chitchat", END)
     .addConditionalEdges("grader", routeAfterGrader, {
       retry: "retrieve",
+      retry_routing: "routing",
       [END]: END,
     });
 

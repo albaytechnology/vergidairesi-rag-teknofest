@@ -72,6 +72,51 @@
       "expectedDocs": [],
       "expectedAnswerContains": [],
       "notes": "Tuzak — boyle bir kisi korpusta yok"
+    },
+    {
+      "id": "route-001",
+      "scenario": "service_routing",
+      "question": "Vergi borcumu tecil ve taksitlendirmek istiyorum. Dilekcem hangi servise yonlendirilmeli?",
+      "expectedDocs": ["vergi_daireleri_kurulus_ve_gorev_yonetmeligi"],
+      "expectedAnswerContains": ["Sürekli Yükümlülükler Vergilendirme Servisi", "Madde 11"],
+      "expectedAnswerNotContains": ["Hesap ve Takip Masası"],
+      "notes": "Tecil islemleri Madde 11-A-I-2-f kapsaminda; masa seviyesi iddia edilmemeli"
+    },
+    {
+      "id": "route-002",
+      "scenario": "service_routing",
+      "question": "Vergi cezasina iliskin uzlasma talebinde bulunuyorum. Evrak hangi servise gitmeli?",
+      "expectedDocs": ["vergi_daireleri_kurulus_ve_gorev_yonetmeligi"],
+      "expectedAnswerContains": ["Uzlaşma Servisi", "Madde 11"],
+      "expectedAnswerNotContains": [],
+      "notes": "Uzlasma yazisma ve arsiv gorevleri Madde 11-B-I-4"
+    },
+    {
+      "id": "route-003",
+      "scenario": "service_routing",
+      "question": "Bilanço ve gelir tablosu ekli beyanname yazisi geldi. Hangi servise yonlendirilmeli?",
+      "expectedDocs": ["vergi_daireleri_kurulus_ve_gorev_yonetmeligi"],
+      "expectedAnswerContains": ["Vergilendirme"],
+      "expectedAnswerNotContains": ["Gelir Servisi"],
+      "notes": "Adversarial: gelir tablosu ifadesi Gelir Servisi'ne yonlendirmemeli"
+    },
+    {
+      "id": "route-005",
+      "scenario": "service_routing",
+      "question": "Motorlu Tasitlar Vergisi borcumun tecil ve taksitlendirilmesini talep ediyorum. Dilekce hangi servise yonlendirilmeli?",
+      "expectedDocs": ["vergi_daireleri_kurulus_ve_gorev_yonetmeligi"],
+      "expectedAnswerContains": ["Süreksiz Yükümlülükler Vergilendirme Servisi"],
+      "expectedAnswerNotContains": ["Sürekli Yükümlülükler Vergilendirme Servisi"],
+      "notes": "MTV Madde 10'da Sureksiz Yukumlulukler Vergilendirme Servisi altinda sayilir. 'Tecil' kelimesi Surekli servisin gorev maddesinde (M.11-A-I-2-f) gectigi icin yuzeysel eslesme buraya cekiyor; dogru ayrim Madde 10 teskilat semasindan gelir."
+    },
+    {
+      "id": "route-004",
+      "scenario": "service_routing",
+      "question": "Kurum bahcesine dikilecek agac turleriyle ilgili bir talep geldi. Vergi dairesinde hangi servise gitmeli?",
+      "expectedDocs": [],
+      "expectedAnswerContains": ["belirlenemedi", "manuel inceleme"],
+      "expectedAnswerNotContains": ["Servisi"],
+      "notes": "Net yonetmelik karsiligi yoksa servis uydurulmamali"
     }
   ]
 }

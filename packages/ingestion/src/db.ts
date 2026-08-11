@@ -1,5 +1,13 @@
 import pg from "pg";
-import { config } from "@albay/shared";
+import { randomUUID } from "node:crypto";
+import {
+  config,
+  IslemTuruSchema,
+  type Corpus,
+  type DocumentAnalysis,
+  type ExtractedEntities,
+  type ServiceRoutingDecision,
+} from "@albay/shared";
 
 export const pool = new pg.Pool({ connectionString: config.DATABASE_URL });
 
@@ -53,6 +61,7 @@ export async function migrate(): Promise<void> {
 
     -- Faz 3: siniflandirma + embedding takibi
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_type TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS corpus TEXT NOT NULL DEFAULT 'documents';
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS entities JSONB DEFAULT '[]';
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS contains_pii BOOLEAN;
@@ -60,6 +69,98 @@ export async function migrate(): Promise<void> {
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS classified_at TIMESTAMPTZ;
     ALTER TABLE chunks ADD COLUMN IF NOT EXISTS embedded_at TIMESTAMPTZ;
+    ALTER TABLE chunks ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+    CREATE INDEX IF NOT EXISTS idx_documents_corpus ON documents (corpus);
+
+    -- Faz 5b: evrak analizi (classify'dan daha ayrintili, vergi dairesi evragina ozel)
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_subject TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_summary_long TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS extracted_entities JSONB;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS analyzed_at TIMESTAMPTZ;
+    -- Faz 5c: yonlendirmenin ve cevap yazisinin girdisi olan alanlar. routing_key
+    -- bunlardan turedigi halde bilesenleri saklanmiyordu; yeniden yonlendirme ve
+    -- yazi uretimi analizi bastan calistirmadan yapilabilsin diye kalici hale geldi.
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS islem_turu TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS alacak_turu TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_title_suggestion TEXT;
+
+    -- Faz 5b: servis yonlendirme sonucu (ingest aninda hesaplanir, havuz bundan cikar)
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routed_birim TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routed_service TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routing_confidence REAL;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routing_reasoning TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routing_regulation_refs JSONB;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routing_status TEXT NOT NULL DEFAULT 'pending';
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routed_at TIMESTAMPTZ;
+    -- Ayni tur evrakin ayni servise gitmesini denetlemek icin (pnpm routing:audit)
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS routing_key TEXT;
+
+    -- Faz 5e: evrakin YASAM DONGUSU (Yazisma ve Arsiv Servisi takibi).
+    --
+    -- Neden ayri bir sutun: documents.status ZATEN VAR ve parse hattinin
+    -- durumunu tutuyor (pending/parsing/parsed/failed). Ayni ada yeni bir
+    -- anlam yuklemek worker'i bozardi; is akisi durumu bagimsiz izlenir.
+    --   new         → yuklendi, henuz siniflandirilmadi
+    --   routed      → servise yonlendirildi
+    --   in_progress → calisan belgeyi acti
+    --   completed   → cevap yazisi PDF olarak disari alindi
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS lifecycle_status TEXT NOT NULL DEFAULT 'new';
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+    -- Hangi kararla cevaplandigi. response_letters'a yalnizca "kaydet" denince
+    -- yazildigi icin, PDF'i kaydetmeden indiren kullanicida orasi bos kalir;
+    -- arsiv kartinda karar gorunsun diye tamamlama aninda buraya da yazilir.
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS completed_decision TEXT;
+    CREATE INDEX IF NOT EXISTS idx_documents_lifecycle ON documents (lifecycle_status);
+    -- Sutun eklenmeden once yonlendirilmis belgeler 'new' gorunmesin.
+    UPDATE documents SET lifecycle_status = 'routed'
+     WHERE lifecycle_status = 'new' AND routing_status <> 'pending';
+    CREATE INDEX IF NOT EXISTS idx_documents_routed_service ON documents (routed_service);
+    CREATE INDEX IF NOT EXISTS idx_documents_routing_status ON documents (routing_status);
+
+    -- Faz 5b: belge bazli chat gecmisi (multi-turn hafiza)
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id UUID PRIMARY KEY,
+      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      sources JSONB DEFAULT '[]',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    -- created_at tek basina siralama icin yeterli degil: ayni istekte yazilan
+    -- soru/cevap ciftinin zaman damgasi cakisabiliyor. seq kesin sira verir.
+    ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS seq BIGSERIAL;
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_doc
+      ON chat_messages (document_id, seq);
+
+    -- Faz 5b: uretilen cevap yazilari (son hali insan tarafindan duzenlenmis olabilir)
+    CREATE TABLE IF NOT EXISTS response_letters (
+      id UUID PRIMARY KEY,
+      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      decision TEXT NOT NULL,
+      decision_reason TEXT,
+      mukellef_vkn TEXT,
+      letter_model JSONB NOT NULL,
+      letter_html TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_response_letters_doc ON response_letters (document_id);
+
+    -- Faz 5c: yazinin "Sayi" alanindaki giden evrak sira numarasi.
+    -- Numara ancak yazi KAYDEDILIRKEN alinir; her onizleme icin numara
+    -- tuketilirse giden evrak defterinde bosluklar olusur.
+    ALTER TABLE response_letters ADD COLUMN IF NOT EXISTS letter_no BIGINT;
+    ALTER TABLE response_letters ADD COLUMN IF NOT EXISTS sayi TEXT;
+    CREATE SEQUENCE IF NOT EXISTS response_letter_no_seq START 1;
+
+    -- Faz 5b: chat oturumuna ozel gecici dokumanlar (ana koleksiyona karismaz)
+    CREATE TABLE IF NOT EXISTS session_uploads (
+      session_id TEXT NOT NULL,
+      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (session_id, document_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_session_uploads_expiry ON session_uploads (expires_at);
   `);
 }
 
@@ -124,6 +225,13 @@ export async function setStatus(
   );
 }
 
+export async function setDocumentCorpus(id: string, corpus: Corpus): Promise<void> {
+  await pool.query("UPDATE documents SET corpus = $2, updated_at = now() WHERE id = $1", [
+    id,
+    corpus,
+  ]);
+}
+
 export interface ChunkInsert {
   id: string;
   docId: string;
@@ -133,6 +241,7 @@ export interface ChunkInsert {
   section: string | null;
   parentId: string | null;
   tokenCount: number;
+  metadata?: Record<string, unknown>;
 }
 
 export async function replaceChunks(
@@ -145,9 +254,19 @@ export async function replaceChunks(
     await client.query("DELETE FROM chunks WHERE doc_id = $1", [docId]);
     for (const c of chunks) {
       await client.query(
-        `INSERT INTO chunks (id, doc_id, kind, text, page, section, parent_id, token_count)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [c.id, c.docId, c.kind, c.text, c.page, c.section, c.parentId, c.tokenCount],
+        `INSERT INTO chunks (id, doc_id, kind, text, page, section, parent_id, token_count, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          c.id,
+          c.docId,
+          c.kind,
+          c.text,
+          c.page,
+          c.section,
+          c.parentId,
+          c.tokenCount,
+          JSON.stringify(c.metadata ?? {}),
+        ],
       );
     }
     await client.query("COMMIT");
@@ -206,7 +325,7 @@ export async function docsToClassify(force = false): Promise<DocToClassify[]> {
        WHERE c.doc_id = d.id AND c.kind = 'child'
        ORDER BY c.created_at LIMIT 3
      ) sub ON true
-     WHERE d.status = 'parsed' ${force ? "" : "AND d.classified_at IS NULL"}
+     WHERE d.status = 'parsed' AND d.corpus = 'documents' ${force ? "" : "AND d.classified_at IS NULL"}
      GROUP BY d.id`,
   );
   return res.rows;
@@ -252,22 +371,42 @@ export interface ChunkToEmbed {
   parent_id: string | null;
   filename: string;
   path: string;
+  corpus: Corpus;
   doc_type: string | null;
   contains_pii: boolean | null;
   entities: string[];
+  metadata: Record<string, unknown>;
 }
 
-export async function chunksToEmbed(limit = 64): Promise<ChunkToEmbed[]> {
+export async function chunksToEmbed(limit = 64, corpus: Corpus = "documents"): Promise<ChunkToEmbed[]> {
   const res = await pool.query<ChunkToEmbed>(
     `SELECT c.id, c.doc_id, c.text, c.page, c.section, c.parent_id,
-            d.filename, d.path, d.doc_type, d.contains_pii,
-            COALESCE(d.entities, '[]') AS entities
+            d.filename, d.path, d.corpus, d.doc_type, d.contains_pii,
+            COALESCE(d.entities, '[]') AS entities,
+            COALESCE(c.metadata, '{}') AS metadata
      FROM chunks c
      JOIN documents d ON d.id = c.doc_id
-     WHERE c.kind = 'child' AND c.embedded_at IS NULL
+     WHERE c.kind = 'child' AND c.embedded_at IS NULL AND d.corpus = $2
      ORDER BY c.doc_id
      LIMIT $1`,
-    [limit],
+    [limit, corpus],
+  );
+  return res.rows;
+}
+
+/** Tek bir dokumanin embed bekleyen chunk'lari — pipeline belge belge ilerler. */
+export async function chunksToEmbedForDoc(docId: string, limit = 64): Promise<ChunkToEmbed[]> {
+  const res = await pool.query<ChunkToEmbed>(
+    `SELECT c.id, c.doc_id, c.text, c.page, c.section, c.parent_id,
+            d.filename, d.path, d.corpus, d.doc_type, d.contains_pii,
+            COALESCE(d.entities, '[]') AS entities,
+            COALESCE(c.metadata, '{}') AS metadata
+     FROM chunks c
+     JOIN documents d ON d.id = c.doc_id
+     WHERE c.kind = 'child' AND c.embedded_at IS NULL AND c.doc_id = $1
+     ORDER BY c.created_at
+     LIMIT $2`,
+    [docId, limit],
   );
   return res.rows;
 }
@@ -280,8 +419,13 @@ export async function markEmbedded(chunkIds: string[]): Promise<void> {
   );
 }
 
-export async function resetEmbeddings(): Promise<void> {
-  await pool.query("UPDATE chunks SET embedded_at = NULL");
+export async function resetEmbeddings(corpus: Corpus = "documents"): Promise<void> {
+  await pool.query(
+    `UPDATE chunks c SET embedded_at = NULL
+     FROM documents d
+     WHERE c.doc_id = d.id AND d.corpus = $1`,
+    [corpus],
+  );
 }
 
 export async function statusCounts(): Promise<Record<string, number>> {
@@ -289,4 +433,491 @@ export async function statusCounts(): Promise<Record<string, number>> {
     "SELECT status, COUNT(*) count FROM documents GROUP BY status",
   );
   return Object.fromEntries(res.rows.map((r) => [r.status, Number(r.count)]));
+}
+
+// ─── Faz 5b: evrak analizi + servis yonlendirme ───────────────────────
+
+export async function saveDocumentAnalysis(
+  docId: string,
+  a: DocumentAnalysis,
+  reviewThreshold = 0.6,
+): Promise<void> {
+  await pool.query(
+    `UPDATE documents SET
+       doc_subject = $2, doc_summary_long = $3, extracted_entities = $4,
+       doc_type = $5, summary = $6, contains_pii = $7,
+       classification_confidence = $8, needs_review = $9,
+       islem_turu = $10, alacak_turu = $11, doc_title_suggestion = $12,
+       analyzed_at = now(), classified_at = now(), updated_at = now()
+     WHERE id = $1`,
+    [
+      docId,
+      a.konu,
+      a.ozet,
+      JSON.stringify(a.entities),
+      a.docType,
+      a.ozet.slice(0, 500),
+      a.containsPII,
+      a.confidence,
+      a.confidence < reviewThreshold,
+      a.islemTuru,
+      a.alacakTuru,
+      a.baslikOnerisi,
+    ],
+  );
+}
+
+export async function saveRoutingDecision(
+  docId: string,
+  d: ServiceRoutingDecision,
+  routingKey?: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE documents SET
+       routed_birim = $2, routed_service = $3, routing_confidence = $4,
+       routing_reasoning = $5, routing_regulation_refs = $6, routing_status = $7,
+       routing_key = COALESCE($8, routing_key),
+       routed_at = now(), updated_at = now(),
+       -- Yasam dongusu yalnizca ILERI gider: uzerinde calisilmis ya da
+       -- cevaplanmis bir evrak yeniden yonlendirilirse 'routed'a dusmemeli.
+       lifecycle_status = CASE WHEN lifecycle_status = 'new' THEN 'routed'
+                               ELSE lifecycle_status END
+     WHERE id = $1`,
+    [
+      docId,
+      d.anaBirim ?? d.digerBirim,
+      d.belirlenemedi ? null : d.servis,
+      d.guvenSkoru,
+      d.gerekce,
+      JSON.stringify(d.ilgiliMaddeler),
+      d.belirlenemedi ? "belirlenemedi" : "routed",
+      routingKey ?? null,
+    ],
+  );
+}
+
+export interface RoutingConsistencyRow {
+  routing_key: string;
+  servisler: string[];
+  belgeler: { filename: string; servis: string | null }[];
+}
+
+/**
+ * Ayni routing_key'e sahip olup FARKLI servise yonlendirilmis evraklar.
+ * Bos donmesi beklenir; dolu donuyorsa ayni tur evrak farkli islem goruyor demektir.
+ */
+export async function routingInconsistencies(): Promise<RoutingConsistencyRow[]> {
+  const res = await pool.query<{
+    routing_key: string;
+    servisler: string[];
+    belgeler: { filename: string; servis: string | null }[];
+  }>(
+    `SELECT routing_key,
+            array_agg(DISTINCT COALESCE(routed_service, '(belirlenemedi)')) AS servisler,
+            json_agg(json_build_object('filename', filename, 'servis', routed_service)) AS belgeler
+     FROM documents
+     WHERE corpus = 'documents' AND routing_key IS NOT NULL AND routing_status <> 'pending'
+     GROUP BY routing_key
+     HAVING COUNT(DISTINCT COALESCE(routed_service, '(belirlenemedi)')) > 1`,
+  );
+  return res.rows;
+}
+
+export interface ServiceQueueRow {
+  servis: string | null;
+  birim: string | null;
+  adet: number;
+}
+
+/**
+ * Servis havuzlarinin doluluk ozeti. Servis adlari HARDCODE EDILMEZ —
+ * yonlendirilmis dokumanlardan gelir; katalog icin regulationServices() kullanilir.
+ */
+/**
+ * Servis havuzlarindan oturuma ozel ekleri eleyen kosul.
+ *
+ * Sohbete aticlanan bir belge (ornegin mukellefin gonderdigi ek mevzuat) hattan
+ * normal evrak gibi geciyor ve bir servise yonlendiriliyor. Ama o RESMI EVRAK
+ * DEGILDIR: kaydi yapilmis, havuza dusmesi ve sayaci artirmasi gereken bir
+ * basvuru degil, yalnizca o sohbetin baglami. Chat tarafi bu belgelere
+ * sessionDocumentIds uzerinden eristigi icin bu filtre aramayi etkilemez.
+ */
+const OTURUM_EKI_DEGIL = `id NOT IN (
+  SELECT document_id FROM session_uploads WHERE expires_at > now()
+)`;
+
+export async function serviceQueueCounts(): Promise<ServiceQueueRow[]> {
+  const res = await pool.query<{ servis: string | null; birim: string | null; adet: string }>(
+    `SELECT routed_service AS servis, routed_birim AS birim, COUNT(*) adet
+     FROM documents
+     WHERE corpus = 'documents' AND routing_status <> 'pending'
+       AND ${OTURUM_EKI_DEGIL}
+     GROUP BY routed_service, routed_birim
+     ORDER BY adet DESC`,
+  );
+  return res.rows.map((r) => ({ servis: r.servis, birim: r.birim, adet: Number(r.adet) }));
+}
+
+/**
+ * Yonetmelik korpusundan turetilen servis katalogu.
+ * Taksonomi kodda tanimli degil — yonetmelik chunk metadata'sindan okunur.
+ */
+export async function regulationServices(): Promise<
+  { servis: string; hizmetBirimi: string | null; altBolum: string | null; maddeNo: string }[]
+> {
+  const res = await pool.query<{
+    servis: string;
+    hizmet_birimi: string | null;
+    alt_bolum: string | null;
+    madde_no: string;
+  }>(
+    `SELECT DISTINCT ON (c.metadata->>'servis')
+            c.metadata->>'servis'       AS servis,
+            c.metadata->>'hizmetBirimi' AS hizmet_birimi,
+            c.metadata->>'altBolum'     AS alt_bolum,
+            c.metadata->>'maddeNo'      AS madde_no
+     FROM chunks c
+     JOIN documents d ON d.id = c.doc_id
+     WHERE d.corpus = 'regulations'
+       AND c.kind = 'child'
+       AND c.metadata->>'servis' IS NOT NULL
+     ORDER BY c.metadata->>'servis', c.metadata->>'maddeNo'`,
+  );
+  return res.rows.map((r) => ({
+    servis: r.servis,
+    hizmetBirimi: r.hizmet_birimi,
+    altBolum: r.alt_bolum,
+    maddeNo: r.madde_no,
+  }));
+}
+
+export interface DocumentDetail extends DocumentRow {
+  corpus: Corpus;
+  doc_subject: string | null;
+  doc_summary_long: string | null;
+  doc_title_suggestion: string | null;
+  islem_turu: string | null;
+  alacak_turu: string | null;
+  analyzed_at: string | null;
+  classification_confidence: number | null;
+  extracted_entities: ExtractedEntities | null;
+  doc_type: string | null;
+  contains_pii: boolean | null;
+  routed_birim: string | null;
+  routed_service: string | null;
+  routing_confidence: number | null;
+  routing_reasoning: string | null;
+  routing_regulation_refs: { maddeNo: string; baslik: string }[] | null;
+  routing_status: string;
+  lifecycle_status: LifecycleStatus;
+  completed_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Kayitli analizi DocumentAnalysis'e geri cevirir.
+ *
+ * Analizi YENIDEN CALISTIRMIYORUZ: cevap yazisi ve yeniden yonlendirme,
+ * evrakin havuza duserken uretilmis analiziyle ayni verilere dayanmali.
+ * Yeniden calistirmak, yazinin yonlendirme kararindan baska bir okumaya
+ * dayanmasina yol acabilirdi.
+ */
+export function documentAnalysisFromRow(d: DocumentDetail): DocumentAnalysis {
+  const islemTuru = IslemTuruSchema.safeParse(d.islem_turu);
+  return {
+    konu: d.doc_subject ?? d.filename,
+    baslikOnerisi: d.doc_title_suggestion ?? d.doc_subject ?? d.filename,
+    ozet: d.doc_summary_long ?? "",
+    docType: (d.doc_type as DocumentAnalysis["docType"]) ?? "diger",
+    islemTuru: islemTuru.success ? islemTuru.data : "diger",
+    alacakTuru: d.alacak_turu ?? "",
+    entities: d.extracted_entities ?? {
+      vkn: null,
+      tckn: null,
+      tarihler: [],
+      tutarlar: [],
+      plakalar: [],
+      donemler: [],
+      kisiKurumlar: [],
+    },
+    containsPII: d.contains_pii ?? false,
+    confidence: d.classification_confidence ?? 0,
+  };
+}
+
+export async function getDocumentDetail(docId: string): Promise<DocumentDetail | null> {
+  const res = await pool.query<DocumentDetail>("SELECT * FROM documents WHERE id = $1", [docId]);
+  return res.rows[0] ?? null;
+}
+
+/** Servis havuzu listesi. servis=null verilirse henuz yonlendirilememisler doner. */
+export async function listDocumentsByService(
+  servis: string | null,
+  limit = 100,
+): Promise<DocumentDetail[]> {
+  const res = await pool.query<DocumentDetail>(
+    `SELECT * FROM documents
+     WHERE corpus = 'documents'
+       AND ${servis === null ? "routing_status = 'belirlenemedi'" : "routed_service = $2"}
+       AND ${OTURUM_EKI_DEGIL}
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    servis === null ? [limit] : [limit, servis],
+  );
+  return res.rows;
+}
+
+// ─── Faz 5e: Yazisma ve Arsiv Servisi — belge yasam dongusu ───────────
+
+export type LifecycleStatus = "new" | "routed" | "in_progress" | "completed";
+
+/** Durumlarin ileri siralamasi; geri dusmeyi engellemek icin. */
+const YASAM_SIRASI: Record<LifecycleStatus, number> = {
+  new: 0,
+  routed: 1,
+  in_progress: 2,
+  completed: 3,
+};
+
+/**
+ * Yasam dongusu durumunu ILERI yonde gunceller.
+ *
+ * Geri dusme bilerek engelli: calisan belgeyi ikinci kez actiginda ya da
+ * cevaplanmis bir evraga geri dondugunde durum gerilerse, arsiv panelindeki
+ * "cevap yazildi" bilgisi kaybolur ve is takibi yaniltici hale gelir.
+ */
+export async function setLifecycleStatus(
+  docId: string,
+  durum: LifecycleStatus,
+  karar?: string,
+): Promise<void> {
+  const geriDusmeyecekler = (Object.keys(YASAM_SIRASI) as LifecycleStatus[]).filter(
+    (d) => YASAM_SIRASI[d] >= YASAM_SIRASI[durum],
+  );
+  await pool.query(
+    `UPDATE documents
+        SET lifecycle_status = $2,
+            completed_at = CASE WHEN $2 = 'completed' THEN now() ELSE completed_at END,
+            completed_decision = CASE WHEN $2 = 'completed'
+                                      THEN COALESCE($4, completed_decision)
+                                      ELSE completed_decision END,
+            updated_at = now()
+      WHERE id = $1 AND lifecycle_status <> ALL($3::text[])`,
+    [docId, durum, geriDusmeyecekler, karar ?? null],
+  );
+}
+
+/**
+ * Arsiv listesi: cevap yazisi yazilmis / yazilmamis tum evrak.
+ *
+ * Servis havuzlarindan farkli olarak SERVISE GORE filtrelemez — Yazisma ve
+ * Arsiv Servisi kuruma giren her belgeyi bastan sona takip eder (M.11-B-I-6).
+ * Oturuma ozel ekler burada da yok: onlar resmi evrak degil.
+ */
+export async function listArchiveDocuments(
+  tamamlandi: boolean,
+  limit = 200,
+): Promise<(DocumentDetail & { son_karar: string | null })[]> {
+  const res = await pool.query<DocumentDetail & { son_karar: string | null }>(
+    `SELECT d.*,
+            -- Tamamlanan evrakta hangi kararla cevaplandigi kartta gorunmeli.
+            (SELECT r.decision FROM response_letters r
+              WHERE r.document_id = d.id
+              ORDER BY r.created_at DESC LIMIT 1) AS son_karar
+       FROM documents d
+      WHERE d.corpus = 'documents'
+        AND d.lifecycle_status ${tamamlandi ? "=" : "<>"} 'completed'
+        AND d.${OTURUM_EKI_DEGIL}
+      ORDER BY ${tamamlandi ? "d.completed_at" : "d.created_at"} DESC NULLS LAST
+      LIMIT $1`,
+    [limit],
+  );
+  return res.rows;
+}
+
+export async function archiveCounts(): Promise<{ bekleyen: number; tamamlanan: number }> {
+  const res = await pool.query<{ tamamlanan: string; bekleyen: string }>(
+    `SELECT COUNT(*) FILTER (WHERE lifecycle_status = 'completed')  AS tamamlanan,
+            COUNT(*) FILTER (WHERE lifecycle_status <> 'completed') AS bekleyen
+       FROM documents
+      WHERE corpus = 'documents' AND ${OTURUM_EKI_DEGIL}`,
+  );
+  const r = res.rows[0]!;
+  return { bekleyen: Number(r.bekleyen), tamamlanan: Number(r.tamamlanan) };
+}
+
+// ─── Faz 5b: chat gecmisi ─────────────────────────────────────────────
+
+export interface ChatMessageRow {
+  id: string;
+  document_id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources: string[];
+  created_at: string;
+}
+
+export async function appendChatMessage(msg: {
+  documentId: string;
+  role: "user" | "assistant";
+  content: string;
+  sources?: string[];
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO chat_messages (id, document_id, role, content, sources)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [randomUUID(), msg.documentId, msg.role, msg.content, JSON.stringify(msg.sources ?? [])],
+  );
+}
+
+/** Son N mesaj, kronolojik sirada (multi-turn hafiza icin). */
+export async function getChatHistory(documentId: string, limit = 20): Promise<ChatMessageRow[]> {
+  const res = await pool.query<ChatMessageRow>(
+    `SELECT * FROM (
+       SELECT * FROM chat_messages WHERE document_id = $1
+       ORDER BY seq DESC LIMIT $2
+     ) t ORDER BY seq ASC`,
+    [documentId, limit],
+  );
+  return res.rows;
+}
+
+/**
+ * Soru ve cevabi TEK islemde yazar.
+ *
+ * Ayri ayri yazilirsa istemci akis ortasinda baglantiyi kestiginde gecmiste
+ * cevapsiz bir kullanici mesaji kalir; bir sonraki turda modele ust uste iki
+ * "user" mesaji gider. Ya ikisi birden yazilir ya da hicbiri.
+ */
+export async function appendChatExchange(exchange: {
+  documentId: string;
+  question: string;
+  answer: string;
+  sources?: string[];
+}): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO chat_messages (id, document_id, role, content, sources)
+       VALUES ($1, $2, 'user', $3, '[]'::jsonb)`,
+      [randomUUID(), exchange.documentId, exchange.question],
+    );
+    await client.query(
+      `INSERT INTO chat_messages (id, document_id, role, content, sources)
+       VALUES ($1, $2, 'assistant', $3, $4)`,
+      [
+        randomUUID(),
+        exchange.documentId,
+        exchange.answer,
+        JSON.stringify(exchange.sources ?? []),
+      ],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ─── Faz 5b/5c: cevap yazilari ────────────────────────────────────────
+
+/**
+ * Giden evrak sira numarasi uretir.
+ *
+ * Sadece yazi kaydedilirken cagrilir. Onizleme her tuş vurusunda yeniden
+ * uretilebildigi icin, onizlemede numara tuketilseydi defterde koca bosluklar
+ * olusurdu; onizleme yer tutucu ("[SIRA NO]") gosterir.
+ */
+export async function nextLetterNo(): Promise<number> {
+  const res = await pool.query<{ n: string }>(
+    "SELECT nextval('response_letter_no_seq') AS n",
+  );
+  return Number(res.rows[0]!.n);
+}
+
+export async function saveResponseLetter(letter: {
+  documentId: string;
+  decision: string;
+  decisionReason: string | null;
+  mukellefVkn: string | null;
+  letterNo: number | null;
+  sayi: string | null;
+  letterModel: unknown;
+  letterHtml: string;
+}): Promise<string> {
+  const id = randomUUID();
+  await pool.query(
+    `INSERT INTO response_letters
+       (id, document_id, decision, decision_reason, mukellef_vkn,
+        letter_no, sayi, letter_model, letter_html)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      id,
+      letter.documentId,
+      letter.decision,
+      letter.decisionReason,
+      letter.mukellefVkn,
+      letter.letterNo,
+      letter.sayi,
+      JSON.stringify(letter.letterModel),
+      letter.letterHtml,
+    ],
+  );
+  return id;
+}
+
+export interface ResponseLetterRow {
+  id: string;
+  document_id: string;
+  decision: string;
+  decision_reason: string | null;
+  mukellef_vkn: string | null;
+  letter_no: string | null;
+  sayi: string | null;
+  letter_model: unknown;
+  letter_html: string;
+  created_at: string;
+}
+
+/** Bir evrak icin uretilmis yazilar, en yenisi basta. */
+export async function listResponseLetters(docId: string): Promise<ResponseLetterRow[]> {
+  const res = await pool.query<ResponseLetterRow>(
+    "SELECT * FROM response_letters WHERE document_id = $1 ORDER BY created_at DESC",
+    [docId],
+  );
+  return res.rows;
+}
+
+export async function getResponseLetter(id: string): Promise<ResponseLetterRow | null> {
+  const res = await pool.query<ResponseLetterRow>(
+    "SELECT * FROM response_letters WHERE id = $1",
+    [id],
+  );
+  return res.rows[0] ?? null;
+}
+
+// ─── Faz 5b: oturuma ozel gecici dokumanlar ───────────────────────────
+
+export async function registerSessionUpload(
+  sessionId: string,
+  documentId: string,
+  ttlHours = 12,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO session_uploads (session_id, document_id, expires_at)
+     VALUES ($1, $2, now() + ($3 || ' hours')::interval)
+     ON CONFLICT (session_id, document_id) DO NOTHING`,
+    [sessionId, documentId, String(ttlHours)],
+  );
+}
+
+export async function sessionDocumentIds(sessionId: string): Promise<string[]> {
+  const res = await pool.query<{ document_id: string }>(
+    "SELECT document_id FROM session_uploads WHERE session_id = $1 AND expires_at > now()",
+    [sessionId],
+  );
+  return res.rows.map((r) => r.document_id);
 }

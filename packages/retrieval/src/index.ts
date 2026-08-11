@@ -14,7 +14,12 @@ export {
   client,
   ensureCollection,
   upsertChunkPoints,
+  upsertChunkPointsToCollection,
   deleteByDocId,
+  deletePoints,
+  pointIdsByDocId,
+  distinctDocIds,
+  collectionExists,
   collectionInfo,
   type ChunkPoint,
 } from "./qdrant.ts";

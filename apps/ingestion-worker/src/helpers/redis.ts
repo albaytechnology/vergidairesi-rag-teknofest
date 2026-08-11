@@ -3,10 +3,18 @@ import { Redis } from "ioredis";
 import { config } from "@albay/shared";
 
 export const PARSE_QUEUE = "parse";
+export const PROCESS_QUEUE = "process";
 
 export interface ParseJobData {
   /** Kaynak dosyanin mutlak yolu */
   path: string;
+  /** Hangi korpusa ait; verilmezse "documents". */
+  corpus?: "documents" | "regulations";
+}
+
+export interface ProcessJobData {
+  docId: string;
+  corpus?: "documents" | "regulations";
 }
 
 /**
@@ -29,6 +37,23 @@ export async function createRedisConnection(): Promise<Redis> {
     throw new Error(`Redis'e baglanilamadi: ${config.REDIS_URL}`);
   }
   return connection;
+}
+
+/**
+ * Parse sonrasi hat: chunk → analiz → yonlendirme → embed.
+ * Parse'tan ayri bir kuyruk cunku bu adimlar LLM'e bagli ve cok daha yavas;
+ * ayni worker'da tutulursa Docling'in onunu tikar.
+ */
+export function createProcessQueue(connection: Redis): Queue<ProcessJobData> {
+  return new Queue<ProcessJobData>(PROCESS_QUEUE, {
+    connection,
+    defaultJobOptions: {
+      attempts: 2,
+      backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: true,
+      removeOnFail: { count: 1000 },
+    },
+  });
 }
 
 export function createParseQueue(connection: Redis): Queue<ParseJobData> {

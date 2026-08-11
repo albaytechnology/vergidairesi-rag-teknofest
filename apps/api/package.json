@@ -1,0 +1,25 @@
+{
+  "name": "@albay/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@albay/agents": "workspace:*",
+    "@albay/ingestion": "workspace:*",
+    "@albay/letter": "workspace:*",
+    "@albay/llm": "workspace:*",
+    "@albay/retrieval": "workspace:*",
+    "@albay/shared": "workspace:*",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^9.2.1",
+    "bullmq": "^5.34.0",
+    "fastify": "^5.11.3",
+    "ioredis": "^5.4.0",
+    "zod": "^3.25.0"
+  }
+}

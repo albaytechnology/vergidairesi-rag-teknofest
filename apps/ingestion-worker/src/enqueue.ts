@@ -28,8 +28,12 @@ async function collectSupportedFiles(dir: string): Promise<string[]> {
   return out;
 }
 
-const dirArg = process.argv[2];
-if (!dirArg) fail("Kullanim: pnpm ingest <klasor-yolu>");
+const args = process.argv.slice(2);
+const dirArg = args.find((a) => !a.startsWith("--"));
+if (!dirArg) fail("Kullanim: pnpm ingest <klasor-yolu> [--corpus regulations]");
+
+const corpusArg = args[args.indexOf("--corpus") + 1];
+const corpus = args.includes("--corpus") && corpusArg === "regulations" ? "regulations" : "documents";
 
 const root = resolve(dirArg);
 const rootStat = await stat(root).catch(() => null);
@@ -38,7 +42,7 @@ if (!rootStat.isDirectory()) fail(`Bir klasor degil: ${root}`);
 
 const files = await collectSupportedFiles(root);
 if (!files.length) fail(`Desteklenen dosya yok (${[...SUPPORTED].join(", ")}): ${root}`);
-console.log(`${files.length} desteklenen dosya bulundu (${root})`);
+console.log(`${files.length} desteklenen dosya bulundu (${root}) — corpus: ${corpus}`);
 
 const connection = await createRedisConnection();
 const queue = createParseQueue(connection);
@@ -79,7 +83,11 @@ const skipped = checked.length - toAdd.length;
 
 if (toAdd.length) {
   await queue.addBulk(
-    toAdd.map(({ path, jobId }) => ({ name: "parse", data: { path }, opts: { jobId } })),
+    toAdd.map(({ path, jobId }) => ({
+      name: "parse",
+      data: { path, corpus } as const,
+      opts: { jobId },
+    })),
   );
 }
 

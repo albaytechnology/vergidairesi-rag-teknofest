@@ -21,6 +21,15 @@ data/
 uploads/
 *.log
 
+# Gecici ciktilar — tmp/letters altinda uretilen cevap yazilari GERCEK mukellef
+# verisi (ad, VKN, tutar) tasir; repoya girmemeli.
+tmp/
+
+# Bu bir pnpm workspace'i; npm/yarn lockfile'lari kazara olusmus demektir ve
+# iki farkli cozunurluk agaci birbiriyle celisir.
+package-lock.json
+yarn.lock
+
 # IDE / OS
 .DS_Store
 .idea/

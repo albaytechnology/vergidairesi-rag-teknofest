@@ -39,6 +39,10 @@ async function check(
 
 const results: CheckResult[] = [];
 
+function hasModel(models: string[], requested: string): boolean {
+  return models.some((model) => model === requested || model === `${requested}:latest`);
+}
+
 // 1. Qdrant
 results.push(
   await check("Qdrant", async () => {
@@ -89,22 +93,25 @@ const ollama = new OllamaClient();
 results.push(
   await check("Ollama (uzak)", async () => {
     const models = await ollama.listModels();
-    const hasChat = models.some((m) => m.startsWith(config.OLLAMA_CHAT_MODEL));
-    const hasEmbed = models.some((m) =>
-      m.startsWith(config.OLLAMA_EMBED_MODEL),
-    );
+    const hasChat = hasModel(models, config.OLLAMA_CHAT_MODEL);
+    const hasEmbed = hasModel(models, config.OLLAMA_EMBED_MODEL);
     const missing = [
       !hasChat ? `chat modeli '${config.OLLAMA_CHAT_MODEL}' yok` : null,
       !hasEmbed ? `embed modeli '${config.OLLAMA_EMBED_MODEL}' yok` : null,
     ].filter(Boolean);
-    if (missing.length) throw new Error(missing.join("; "));
-    return `ayakta — ${models.length} model: ${models.join(", ")}`;
+    const modelList = models.length ? models.join(", ") : "model yok";
+    if (missing.length) {
+      throw new Error(
+        `${missing.join("; ")} — ${config.OLLAMA_BASE_URL} uzerindeki modeller: ${modelList}`,
+      );
+    }
+    return `ayakta — ${config.OLLAMA_BASE_URL} — ${models.length} model: ${modelList}`;
   }),
 );
 
 // 6. Embedding — Turkce ornek
 results.push(
-  await check("Embedding (bge-m3)", async () => {
+  await check(`Embedding (${config.OLLAMA_EMBED_MODEL})`, async () => {
     const [vec] = await ollama.embed(["Merhaba dunya, bu bir deneme."]);
     if (!vec || vec.length === 0) throw new Error("bos vektor dondu");
     return `calisiyor — boyut: ${vec.length}`;
@@ -113,7 +120,7 @@ results.push(
 
 // 7. Chat — Qwen Turkce
 results.push(
-  await check("Chat (Qwen)", async () => {
+  await check(`Chat (${config.OLLAMA_CHAT_MODEL})`, async () => {
     const answer = await withTimeout(
       ollama.chat([
         { role: "user", content: "Tek kelimeyle cevapla: Turkiye'nin baskenti neresi?" },
@@ -121,6 +128,26 @@ results.push(
       30000,
     );
     return `calisiyor — cevap: ${answer.slice(0, 60).replace(/\n/g, " ")}`;
+  }),
+);
+
+// 8. API (Faz 5b) — calismiyorsa uyari, hata degil: CLI akislari API'siz de calisir
+results.push(
+  await check("API", async () => {
+    const res = await fetch(`http://${config.API_HOST}:${config.API_PORT}/api/health`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return `ayakta — :${config.API_PORT}`;
+  }),
+);
+
+// 9. Chromium (Faz 5c) — cevap yazisinin PDF'i bununla uretiliyor
+results.push(
+  await check("Chromium (PDF)", async () => {
+    const { isChromiumReady, closeBrowser } = await import("@albay/letter");
+    const durum = await isChromiumReady();
+    await closeBrowser();
+    if (!durum.ok) throw new Error(durum.detail);
+    return `kurulu — ${durum.detail}`;
   }),
 );
 
@@ -134,8 +161,11 @@ console.log("──────────────────────�
 if (failed.length) {
   console.log(`${failed.length} servis basarisiz. Ipuclari:`);
   console.log("  - Docker servisleri icin: docker compose up -d");
-  console.log("  - Ollama icin: .env dosyasinda OLLAMA_BASE_URL dogru mu?");
-  console.log("  - bge-m3 icin: ollama pull bge-m3 (uzak sunucuda)");
+  console.log("  - Ollama icin: .env var mi ve OLLAMA_BASE_URL dogru mu? (cp .env.example .env)");
+  console.log(`  - Chat modeli icin: ollama pull ${config.OLLAMA_CHAT_MODEL} (Ollama sunucusunda)`);
+  console.log(`  - Embed modeli icin: ollama pull ${config.OLLAMA_EMBED_MODEL} (Ollama sunucusunda)`);
+  console.log("  - API icin: pnpm api");
+  console.log("  - Chromium icin: pnpm --filter @albay/letter exec playwright install chromium");
   process.exit(1);
 }
 console.log("Tum servisler hazir. Faz 0 altyapisi tamam! 🎉");

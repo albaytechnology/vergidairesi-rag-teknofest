@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/**
+ * Tailwind v4: tema degiskenleri CSS'te tanimlanir, ayri bir config dosyasi yok.
+ *
+ * Palet GIB kurumsal kimligine dayanir. Kirmizi bir AKSANDIR, ana renk degil:
+ * yalnizca dikkat cekmesi gereken dort yerde kullanilir — aktif sekme, dolu
+ * havuz rozeti, birincil aksiyon butonu ve bolum basligi cizgisi. Genel ton
+ * gri-beyaz-slate; ekranda gun boyu evrak okunacak.
+ */
+@theme {
+  --color-gib: #d42027;
+  --color-gib-koyu: #b01a1f;
+  --color-gib-acik: #fef2f2;
+
+  --color-metin: #1e293b;
+  --color-ikincil: #475569;
+  --color-zemin: #f1f5f9;
+  --color-cizgi: #e2e8f0;
+
+  --color-uyari: #9a3412;
+  --color-onay: #14532d;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-zemin);
+  color: var(--color-metin);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}

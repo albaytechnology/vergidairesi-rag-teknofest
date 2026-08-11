@@ -1,9 +1,15 @@
 /**
- * Parse worker — kuyruktan dosya alir, Docling ile parse eder, sonucu
- * data/parsed/ altina + Postgres'e yazar.
+ * Ingest worker'lari — iki asamali hat:
+ *
+ *   parse   : kuyruktan dosya alir, Docling ile parse eder, data/parsed/ + Postgres
+ *   process : parse biten belgeyi chunk → analiz → servis yonlendirme → embed
+ *
+ * Iki ayri kuyruk cunku process adimi LLM'e bagli ve yavas; ayni worker'da
+ * olsaydi Docling'in onunu tikardi.
+ *
  * Calistir: pnpm worker
  */
-import { Worker, type Job } from "bullmq";
+import { Worker, type Job, type Queue } from "bullmq";
 import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -16,9 +22,13 @@ import {
 } from "@albay/ingestion";
 import {
   createRedisConnection,
+  createProcessQueue,
   PARSE_QUEUE,
+  PROCESS_QUEUE,
   type ParseJobData,
+  type ProcessJobData,
 } from "./helpers/redis.ts";
+import { processDocument } from "./helpers/pipeline.ts";
 
 const OUTPUT_DIR = join(process.cwd(), "data", "parsed");
 await mkdir(OUTPUT_DIR, { recursive: true });
@@ -28,6 +38,9 @@ const docling = new DoclingClient();
 
 /** txt/md dosyalari Docling'e gerek olmadan dogrudan okunur. */
 const PLAIN_TEXT = new Set([".txt", ".md"]);
+
+/** Parse bitince zinciri baslatir; kuyruk worker baslarken kurulur. */
+let processQueue: Queue<ProcessJobData> | null = null;
 
 async function processFile(job: Job<ParseJobData>): Promise<string> {
   const { path } = job.data;
@@ -45,6 +58,7 @@ async function processFile(job: Job<ParseJobData>): Promise<string> {
     hash,
   });
   if (alreadyParsed) return `atlandi (degismemis): ${basename(path)}`;
+  const corpus = job.data.corpus ?? "documents";
 
   await setStatus(row.id, "parsing");
   try {
@@ -72,7 +86,8 @@ async function processFile(job: Job<ParseJobData>): Promise<string> {
       parsedMdPath: mdPath,
       doclingJsonPath: jsonPath,
     });
-    return `parse edildi: ${basename(path)} (${markdown.length} karakter)`;
+    await processQueue?.add("process", { docId: row.id, corpus }, { jobId: row.id });
+    return `parse edildi: ${basename(path)} (${markdown.length} karakter) → hat kuyruguna alindi`;
   } catch (err) {
     await setStatus(row.id, "failed", { error: (err as Error).message });
     throw err; // BullMQ retry mekanizmasi devralsin
@@ -80,25 +95,56 @@ async function processFile(job: Job<ParseJobData>): Promise<string> {
 }
 
 const connection = await createRedisConnection();
-const worker = new Worker<ParseJobData>(PARSE_QUEUE, processFile, {
+processQueue = createProcessQueue(connection);
+
+const parseWorker = new Worker<ParseJobData>(PARSE_QUEUE, processFile, {
   connection,
   concurrency: 2, // Docling agir — ayni anda 2 dosya yeterli
 });
 
-worker.on("completed", (job, result) => {
-  console.log(`✓ [${job.id?.slice(0, 8)}] ${result}`);
+const pipelineWorker = new Worker<ProcessJobData>(
+  PROCESS_QUEUE,
+  async (job: Job<ProcessJobData>) => {
+    const sonuc = await processDocument(job.data.docId, { corpus: job.data.corpus });
+    const hedef =
+      sonuc.routingStatus === "routed"
+        ? `→ ${sonuc.routedService}`
+        : sonuc.routingStatus === "belirlenemedi"
+          ? "→ belirlenemedi (manuel inceleme)"
+          : "";
+    return `${sonuc.filename}: ${sonuc.chunkCount} chunk ${hedef}`;
+  },
+  {
+    connection,
+    // LLM cagrilari seri — uzak Ollama'yi bogmamak icin tek is
+    concurrency: 1,
+  },
+);
+
+parseWorker.on("completed", (job, result) => {
+  console.log(`✓ [parse] ${result}`);
 });
-worker.on("failed", (job, err) => {
+parseWorker.on("failed", (job, err) => {
   console.error(
-    `✗ [${job?.id?.slice(0, 8)}] ${basename(job?.data.path ?? "?")}: ${err.message} (deneme ${job?.attemptsMade}/${job?.opts.attempts})`,
+    `✗ [parse] ${basename(job?.data.path ?? "?")}: ${err.message}` +
+      ` (deneme ${job?.attemptsMade}/${job?.opts.attempts})`,
   );
 });
 
-console.log("Parse worker dinliyor... (durdurmak icin Ctrl+C)");
+pipelineWorker.on("completed", (_job, result) => {
+  console.log(`✓ [hat]   ${result}`);
+});
+pipelineWorker.on("failed", (job, err) => {
+  console.error(`✗ [hat]   ${job?.data.docId?.slice(0, 8)}: ${err.message}`);
+});
+
+console.log("Worker'lar dinliyor: parse + hat (chunk→analiz→yonlendirme→embed)");
+console.log("Durdurmak icin Ctrl+C");
 
 process.on("SIGINT", async () => {
   console.log("\nKapatiliyor...");
-  await worker.close();
+  await Promise.all([parseWorker.close(), pipelineWorker.close()]);
+  await processQueue?.close();
   await pool.end();
   connection.disconnect();
   process.exit(0);

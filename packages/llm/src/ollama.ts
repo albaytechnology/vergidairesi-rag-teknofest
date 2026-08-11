@@ -40,6 +40,59 @@ export class OllamaClient {
     return data.message.content;
   }
 
+  /**
+   * Token token yanit akisi (SSE icin).
+   *
+   * NOT: num_ctx bilerek gonderilmiyor — Ollama'nin varsayilani bu kurulumda
+   * 12k+ token isliyor; elle 8192 vermek prompt'u BASTAN kirpiyor ve sistem
+   * mesajini dusuruyor. Olcum yapilmadan bu deger set edilmemeli.
+   */
+  async *chatStream(messages: ChatMessage[], opts: ChatOptions = {}): AsyncGenerator<string> {
+    const res = await fetch(`${this.baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts.model ?? config.OLLAMA_CHAT_MODEL,
+        messages,
+        stream: true,
+        format: opts.format,
+        options: { temperature: opts.temperature ?? 0.2 },
+      }),
+    });
+    if (!res.ok || !res.body) {
+      throw new Error(`Ollama chat hatasi: ${res.status} ${await res.text()}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Ollama NDJSON dondurur; son satir yarim kalmis olabilir, tamponda tut.
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          const parcali = JSON.parse(trimmed) as {
+            message?: { content?: string };
+            done?: boolean;
+            error?: string;
+          };
+          if (parcali.error) throw new Error(`Ollama: ${parcali.error}`);
+          const parca = parcali.message?.content;
+          if (parca) yield parca;
+        }
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
+  }
+
   async embed(texts: string[], model?: string): Promise<number[][]> {
     const res = await fetch(`${this.baseUrl}/api/embed`, {
       method: "POST",
