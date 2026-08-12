@@ -11,7 +11,10 @@ export interface ServiceRow {
   hizmetBirimi: string | null;
   altBolum: string | null;
   maddeNo: string;
+  /** Cevap yazısı üretilmemiş evrak — asıl iş yükü. */
   bekleyen: number;
+  /** Cevaplanmış evrak; havuzda görünür ama iş beklemez. */
+  tamamlanan: number;
 }
 
 export interface ServicesResponse {

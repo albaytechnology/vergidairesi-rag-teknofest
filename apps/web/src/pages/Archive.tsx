@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import {
   Bos,
-  GuvenSkoru,
+  Dayanak,
   Hata,
   SatirIskeleti,
   Sayfa,
@@ -152,7 +152,7 @@ function ArsivKarti({ doc }: { doc: DocumentSummary & { sonKarar?: string | null
               {doc.routing.servis ?? "belirlenemedi — manuel inceleme"}
             </span>
           </span>
-          <GuvenSkoru skor={doc.routing.guvenSkoru} />
+          <Dayanak maddeler={doc.routing.maddeler} />
           {doc.tamamlanmaTarihi && (
             <span>Cevap yazısı: {trTarih(doc.tamamlanmaTarihi)}</span>
           )}

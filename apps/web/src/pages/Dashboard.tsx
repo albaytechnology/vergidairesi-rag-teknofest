@@ -21,6 +21,7 @@ export function Dashboard() {
 
   const gruplar = data ? grupla(data.services) : [];
   const toplam = data?.services.reduce((t, s) => t + s.bekleyen, 0) ?? 0;
+  const toplamTamamlanan = data?.services.reduce((t, s) => t + s.tamamlanan, 0) ?? 0;
 
   return (
     <Sayfa>
@@ -28,7 +29,9 @@ export function Dashboard() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Vergi Dairesi Servisleri</h1>
           <p className="text-sm text-ikincil">
-            {toplam} evrak yönlendirildi · {data?.services.length ?? 0} servis
+            {toplam} evrak cevap bekliyor
+            {toplamTamamlanan > 0 && ` · ${toplamTamamlanan} cevaplandı`} ·{" "}
+            {data?.services.length ?? 0} servis
           </p>
         </div>
         {data && data.belirlenemedi > 0 && (
@@ -78,7 +81,17 @@ function ServisKarti({ servis }: { servis: ServiceRow }) {
         </div>
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="text-[11px] italic text-slate-400">Madde {servis.maddeNo}</span>
-          {!dolu && <span className="text-[11px] text-slate-400">Bekleyen evrak yok</span>}
+          {!dolu ? (
+            <span className="text-[11px] text-slate-400">
+              {servis.tamamlanan > 0 ? "Tümü cevaplandı" : "Bekleyen evrak yok"}
+            </span>
+          ) : (
+            servis.tamamlanan > 0 && (
+              <span className="text-[11px] text-slate-400">
+                {servis.tamamlanan} cevaplandı
+              </span>
+            )
+          )}
         </div>
       </div>
     </Link>

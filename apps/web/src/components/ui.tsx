@@ -117,8 +117,48 @@ export function YasamRozeti({ durum }: { durum: string }) {
   );
 }
 
-export function GuvenSkoru({ skor }: { skor: number | null }) {
-  if (skor === null) return null;
-  const ton: RozetTonu = skor >= 0.8 ? "onay" : skor >= 0.5 ? "notr" : "uyari";
-  return <Rozet ton={ton}>güven {skor.toFixed(2)}</Rozet>;
+/**
+ * Kararın yönetmelikteki dayanağı.
+ *
+ * Burada eskiden `guvenSkoru` gösteriliyordu; o sayı MODELIN KENDI BEYANI ve
+ * pratikte hep 0.80 çıkıyor (16 belgenin 15'i) — hiçbir şeyi ayırt etmediği
+ * hâlde hesaplanmış bir ölçüt gibi duruyordu. Yerine gerçekten bilgi taşıyan
+ * şeyi koyuyoruz: kararın dayandığı ve `verifyCitations` tarafından
+ * DOĞRULANMIŞ madde numaraları. Uydurma atıflar zaten elenmiş oluyor.
+ */
+export function Dayanak({ maddeler }: { maddeler: { maddeNo: string; baslik: string }[] }) {
+  if (!maddeler.length) return <Rozet ton="uyari">dayanak yok</Rozet>;
+  const ilk = maddeler.slice(0, 2);
+  return (
+    <span
+      title={maddeler.map((m) => `Madde ${m.maddeNo} — ${m.baslik}`).join("\n")}
+      className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-ikincil"
+    >
+      {ilk.map((m) => `M.${m.maddeNo}`).join(" · ")}
+      {maddeler.length > ilk.length ? ` +${maddeler.length - ilk.length}` : ""}
+    </span>
+  );
+}
+
+/**
+ * Model kendi kararından şüpheliyse uyarır.
+ *
+ * Skor bir başarı göstergesi olarak GÖSTERILMEZ (bkz. Dayanak); yalnızca
+ * olağan aralığın altına düştüğünde, yani modelin kendisi tereddüt bildirdiğinde
+ * görünür. O durumda taşıdığı tek bilgi budur.
+ */
+const DUSUK_GUVEN_ESIGI = 0.8;
+
+export function DusukGuvenUyarisi({ skor }: { skor: number | null }) {
+  if (skor === null || skor >= DUSUK_GUVEN_ESIGI) return null;
+  return <Rozet ton="uyari">zayıf eşleşme ({skor.toFixed(2)})</Rozet>;
+}
+
+/** Cevap yazisi uretilmis evrak — havuzda durur ama is beklemez. */
+export function CevaplandiRozeti() {
+  return (
+    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-onay">
+      Cevap yazısı yazılmıştır
+    </span>
+  );
 }

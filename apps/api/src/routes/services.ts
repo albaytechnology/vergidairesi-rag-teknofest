@@ -13,7 +13,7 @@ import { config } from "@albay/shared";
 export async function registerServiceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/services", async () => {
     const [katalog, havuzlar] = await Promise.all([regulationServices(), serviceQueueCounts()]);
-    const adetler = new Map(havuzlar.map((h) => [h.servis, h.adet]));
+    const adetler = new Map(havuzlar.map((h) => [h.servis, h]));
 
     const hedefler = katalog.filter(
       (s) =>
@@ -31,10 +31,12 @@ export async function registerServiceRoutes(app: FastifyInstance): Promise<void>
         hizmetBirimi: s.hizmetBirimi,
         altBolum: s.altBolum,
         maddeNo: s.maddeNo,
-        bekleyen: adetler.get(s.servis) ?? 0,
+        // bekleyen = is yuku; tamamlanan havuzda gorunur ama sayilmaz.
+        bekleyen: adetler.get(s.servis)?.bekleyen ?? 0,
+        tamamlanan: adetler.get(s.servis)?.tamamlanan ?? 0,
       })),
       // Yonlendirilemeyen evraklar ayri bir havuzda toplanir
-      belirlenemedi: adetler.get(null) ?? 0,
+      belirlenemedi: adetler.get(null)?.bekleyen ?? 0,
     };
   });
 }

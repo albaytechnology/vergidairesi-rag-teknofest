@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
-import { Baslik, DurumRozeti, GuvenSkoru, Hata, Rozet, Yukleniyor } from "../components/ui.tsx";
+import {
+  Baslik,
+  DurumRozeti,
+  DusukGuvenUyarisi,
+  Hata,
+  Rozet,
+  Yukleniyor,
+} from "../components/ui.tsx";
 import { ChatPanel } from "../components/ChatPanel.tsx";
 import { LetterPanel } from "../components/LetterPanel.tsx";
 import type { DocumentSummary } from "../api/types.ts";
@@ -49,7 +56,7 @@ export function DocumentPage() {
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {d.containsPII && <Rozet ton="uyari">KVKK</Rozet>}
-          <GuvenSkoru skor={d.routing.guvenSkoru} />
+          <DusukGuvenUyarisi skor={d.routing.guvenSkoru} />
           <DurumRozeti durum={d.routing.durum} />
         </div>
       </div>
