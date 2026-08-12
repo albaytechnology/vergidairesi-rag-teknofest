@@ -35,9 +35,17 @@ export function Archive() {
 
   return (
     <Sayfa dar>
-      <div className="mb-5 border-l-4 border-gib pl-3">
-        <h1 className="text-xl font-bold tracking-tight">Yazışma ve Arşiv Servisi</h1>
-        <p className="text-sm text-ikincil">Kuruma gelen tüm belgelerin takip merkezi</p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="border-l-4 border-gib pl-3">
+          <h1 className="text-xl font-bold tracking-tight">Yazışma ve Arşiv Servisi</h1>
+          <p className="text-sm text-ikincil">Kuruma gelen tüm belgelerin takip merkezi</p>
+        </div>
+        <Link
+          to="/evrak-ekle"
+          className="shrink-0 rounded bg-gib px-3 py-2 text-sm font-medium text-white hover:bg-gib-koyu"
+        >
+          + Evrak Ekle
+        </Link>
       </div>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
@@ -59,9 +67,17 @@ export function Archive() {
         <SatirIskeleti />
       ) : !belgeler.length ? (
         <Bos>
-          {tamamlanan
-            ? "Henüz cevap yazısı üretilmiş evrak yok. PDF indirildiğinde belge buraya taşınır."
-            : "Bekleyen evrak yok."}
+          {tamamlanan ? (
+            "Henüz cevap yazısı üretilmiş evrak yok. PDF indirildiğinde belge buraya taşınır."
+          ) : (
+            <>
+              Bekleyen evrak yok.{" "}
+              <Link to="/evrak-ekle" className="text-gib underline">
+                Evrak ekleyin
+              </Link>
+              .
+            </>
+          )}
         </Bos>
       ) : (
         <div className="space-y-2">

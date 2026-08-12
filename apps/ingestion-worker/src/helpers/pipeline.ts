@@ -51,6 +51,7 @@ interface DocRow {
   filename: string;
   parsed_md_path: string;
   docling_json_path: string | null;
+  session_id: string | null;
 }
 
 export async function processDocument(
@@ -59,12 +60,17 @@ export async function processDocument(
 ): Promise<PipelineResult> {
   const corpus: Corpus = opts.corpus ?? "documents";
   const res = await pool.query<DocRow>(
-    "SELECT id, filename, parsed_md_path, docling_json_path FROM documents WHERE id = $1",
+    "SELECT id, filename, parsed_md_path, docling_json_path, session_id FROM documents WHERE id = $1",
     [docId],
   );
   const doc = res.rows[0];
   if (!doc) throw new Error(`Dokuman bulunamadi: ${docId}`);
   if (!doc.parsed_md_path) throw new Error(`Dokuman henuz parse edilmemis: ${doc.filename}`);
+
+  // Sohbet eki HICBIR giristen yonlendirilmez. Bayragi cagirana birakmak
+  // kirilgandi: `pnpm pipeline -- --force` gibi toplu bir yeniden isleme,
+  // ekleri tekrar servis havuzuna sokardi. Karar belgenin kendisinden okunur.
+  const oturumEki = doc.session_id !== null;
 
   const trace: string[] = [];
   await setDocumentCorpus(doc.id, corpus);
@@ -99,7 +105,7 @@ export async function processDocument(
   let routedService: string | null = null;
   let routingStatus: PipelineResult["routingStatus"] = "atlandi";
 
-  if (corpus === "documents" && !opts.skipAnalysis) {
+  if (corpus === "documents" && !opts.skipAnalysis && !oturumEki) {
     analysis = await analyzeDocument(ollama, { filename: doc.filename, text: markdown });
     await saveDocumentAnalysis(doc.id, analysis);
     trace.push(`analiz → ${analysis.docType}: ${analysis.konu}`);

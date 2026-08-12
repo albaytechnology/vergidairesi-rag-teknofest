@@ -75,12 +75,19 @@ Ayrı terminaller tercih ediliyorsa: `pnpm api`, `pnpm worker`, `pnpm run web`.
 
 ## Kullanım
 
-### Belge yükleme ve işleme
+### Evrak ekleme ve işleme
 
-1. `/upload` ekranından PDF/DOCX sürükleyin (ya da `pnpm ingest <klasör>`)
-2. Sistem belgeyi okur, analiz eder ve yönetmeliğe dayanarak ilgili servise yönlendirir
-   — hat: **parse → chunk → analiz → yönlendirme → embed**
-3. **Yazışma ve Arşiv** panelinden tüm belgelerin durumunu takip edin
+Gerçek işleyişte vergi dairesine gelen her belge önce **Yazışma ve Arşiv Servisi**'ne
+girer, kaydı yapılır, sonra ilgili servise sevk edilir (Yönetmelik M.11-B-I-6).
+Arayüz bu akışı birebir izler:
+
+1. **Evrak Ekle** sekmesinden bilgisayarınızdan **birden fazla** dosya seçin
+   (sürükle-bırak da olur). Toplu klasör ingest'i için: `pnpm ingest <klasör>`
+2. Belge Yazışma ve Arşiv kaydına girer ve **Cevap Yazısı Yazılmayan Dilekçeler**
+   listesine düşer. Arka planda hat çalışır:
+   **parse → chunk → analiz → servis yönlendirme → embed**
+3. Belgeyi açıp sohbet edin, kararı verip cevap yazısını üretin
+4. PDF indirildiği anda evrak **Cevap Yazısı Yazılan** tarafına geçer
 
 ### Yazışma ve Arşiv paneli
 
@@ -119,6 +126,39 @@ pnpm smoke                    # altyapı sağlık kontrolü
 pnpm routing:audit            # aynı tür evrak aynı servise mi gidiyor?
 pnpm qdrant:sync -- --fix     # Qdrant ↔ Postgres indeks kaymasını temizle
 pnpm mektup <ad-parçası> onay # arayüzsüz cevap yazısı üretimi (--ornek: LLM'siz)
+```
+
+## Sorun Giderme
+
+**Arama hiçbir şey bulmuyor / belgeler boş görünüyor.** Postgres'teki `chunks`
+tablosu ile Qdrant birbirinden kaymış olabilir (tablo elle düşürülmüş, doküman
+silinmiş, chunk'lar yeniden üretilmiş). Kurtarma:
+
+```bash
+pnpm migrate                              # eksik tabloları geri getirir (idempotent)
+pnpm qdrant:sync -- --fix                 # Postgres'te karşılığı olmayan vektörleri sil
+pnpm worker &                             # hat çalışsın
+pnpm pipeline -- --corpus regulations     # yönetmeliği yeniden indeksle (yönlendirmenin dayanağı)
+pnpm pipeline -- --force                  # tüm evrakı yeniden chunk/analiz/yönlendir/embed
+pnpm qdrant:sync                          # öksüz point: 0 olmalı
+pnpm routing:audit                        # tutarsızlık: yok olmalı
+```
+
+Yeniden işleme **güvenlidir**: analiz sıcaklığı 0 olduğu için aynı belge aynı
+kararı üretir, yaşam döngüsü durumu yalnızca ileri gittiği için "cevap yazıldı"
+bilgisi kaybolmaz ve sohbet ekleri `session_id` sayesinde yine yönlendirilmez.
+
+**`fetch failed` hatası.** Ollama'ya erişilemiyor demektir; `.env` içindeki
+`OLLAMA_BASE_URL` adresini ve VPN bağlantınızı kontrol edin:
+
+```bash
+curl -m 5 "$(grep OLLAMA_BASE_URL .env | cut -d= -f2-)api/tags"
+```
+
+**Port 3001 kullanımda.** Önceki bir API süreci hayatta kalmış olabilir:
+
+```bash
+pkill -f "apps/api/src/server.ts"
 ```
 
 ## Repo Yapısı
@@ -284,7 +324,8 @@ flowchart TD
 
 ## Evrak İşleme Hattı ve API (Faz 5b)
 
-Dışarıdan gelen evrak `pnpm ingest` ya da `POST /api/upload` ile sisteme girer;
+Dışarıdan gelen evrak `pnpm ingest` (klasör) ya da arayüzdeki **Evrak Ekle**
+sekmesi (`POST /api/upload`) ile sisteme girer;
 worker zinciri **parse → chunk → analiz → servis yönlendirme → embed** adımlarını
 yürütür ve belge ilgili servisin havuzuna düşer. HTTP isteği LLM'i beklemez.
 
@@ -303,7 +344,7 @@ checksum'ından geçer, geçmezse ham metinden çapraz kontrol edilir, o da yoks
 | `GET /api/documents/:id` | Özet kartı + yönlendirme gerekçesi + madde referansları |
 | `GET /api/documents/:id/file` · `/text` | Orijinal PDF · parse edilmiş metin |
 | `POST /api/documents/:id/reroute` | Yeniden hesapla, ya da `{servis}` ile elle ata |
-| `POST /api/upload` | Evrak yükle → hat tetiklenir |
+| `POST /api/upload` | Resmî evrak ekle (çoklu) → Yazışma-Arşiv kaydı + hat tetiklenir |
 | `POST /api/chat` | **SSE** — belge kapsamlı, çok turlu |
 | `GET /api/documents/:id/chat` | Sohbet geçmişi |
 | `POST /api/session-upload?sessionId=` | Sohbete referans belge ekle (yönlendirilmez) |
@@ -504,7 +545,7 @@ sunucu durumu TanStack Query'de, yerel durum `useState`'te.
 |---|---|
 | `/` | Vergi Dairesi Servisleri — yönetmelik hiyerarşisine göre gruplanmış havuzlar |
 | `/arsiv` | Yazışma ve Arşiv — yaşam döngüsüne göre iki liste |
-| `/upload` | Toplu ingest: sürükle-bırak + hat ilerlemesi (menüde yok, URL'den erişilir) |
+| `/evrak-ekle` | Evrak giriş noktası: çoklu dosya seçimi + kayıt ilerlemesi |
 | `/queue/:servis` | Havuz listesi; `belirlenemedi` manuel inceleme havuzudur |
 | `/document/:docId` | Ana ekran — sol özet paneli, sağda Sohbet ve Cevap Yazısı sekmeleri |
 
@@ -513,7 +554,7 @@ yalnızca aktif sekme, dolu havuz rozeti, birincil aksiyon butonu ve bölüm ba�
 çizgisinde kullanılır. Genel ton gri-beyaz-slate — ekranda gün boyu evrak okunacak.
 Sohbetteki kullanıcı balonları da bu yüzden kırmızı değil koyu slate.
 
-**İki tür yükleme, iki ayrı anlam.** `/upload` **resmî evrak** alır: hattan geçer,
+**İki tür yükleme, iki ayrı anlam.** `/evrak-ekle` **resmî evrak** alır: hattan geçer,
 bir servis havuzuna düşer, cevap yazısı bekler. Belge sohbetindeki **ataç** ise
 *referans* belge alır (ek mevzuat, mükellefin gönderdiği ek): chunk'lanıp embed
 edilir, yani o sohbette aranabilir olur, ama **analiz ve servis yönlendirmesi hiç
