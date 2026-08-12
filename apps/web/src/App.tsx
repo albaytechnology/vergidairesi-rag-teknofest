@@ -8,18 +8,23 @@ import { DocumentPage } from "./pages/Document.tsx";
 export function App() {
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-5 border-b border-cizgi bg-white px-6 py-2.5">
-        <NavLink to="/" className="flex items-center gap-2.5">
+      <header className="flex items-center border-b border-cizgi bg-white px-6 py-3">
+        <NavLink to="/" className="flex shrink-0 items-center gap-2.5">
           <img
             src="/gib.jpeg"
             alt="Gelir İdaresi Başkanlığı"
             className="h-9 w-9 shrink-0 object-contain"
           />
-          <span className="text-[15px] font-semibold tracking-tight text-metin">
-            Vergi Dairesi <span className="font-normal text-ikincil">Evrak ve Yazışma</span>
+          <span className="text-base font-bold tracking-tight text-metin">
+            Vergi Dairesi{" "}
+            {/* Alt basligi dar ekranda gizle: navigasyonu sikistirip tasirmasin. */}
+            <span className="hidden font-semibold text-ikincil lg:inline">
+              Yapay Zeka Destekli Evrak ve Yazışma Sistemi
+            </span>
           </span>
         </NavLink>
-        <nav className="flex gap-1 text-sm">
+        {/* Marka blogundan belirgin bir bosluk: sekmeler kurum adina yapisik durmasin. */}
+        <nav className="ml-10 flex gap-4 text-sm xl:ml-20 xl:gap-8">
           <Sekme to="/">Servisler</Sekme>
           <Sekme to="/arsiv">Yazışma ve Arşiv</Sekme>
           <Sekme to="/evrak-ekle">Evrak Ekle</Sekme>
@@ -48,10 +53,8 @@ function Sekme({ to, children }: { to: string; children: React.ReactNode }) {
       to={to}
       end={to === "/"}
       className={({ isActive }) =>
-        `rounded px-3 py-1.5 ${
-          isActive
-            ? "bg-gib-acik font-medium text-gib"
-            : "text-ikincil hover:bg-slate-50 hover:text-metin"
+        `whitespace-nowrap rounded px-3 py-1.5 font-medium ${
+          isActive ? "bg-gib-acik text-gib" : "text-metin/80 hover:bg-slate-50 hover:text-metin"
         }`
       }
     >
