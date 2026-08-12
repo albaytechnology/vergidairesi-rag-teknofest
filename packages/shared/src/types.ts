@@ -17,6 +17,34 @@ export type Chunk = z.infer<typeof ChunkSchema>;
 export const CorpusSchema = z.enum(["documents", "regulations"]);
 export type Corpus = z.infer<typeof CorpusSchema>;
 
+/**
+ * Parse kuyrugu is sozlesmesi — URETICI (apps/api, enqueue CLI) ile TUKETICI
+ * (ingestion-worker) arasinda paylasilir.
+ *
+ * Burada duruyor cunku iki tarafta ayri ayri tanimliyken sessizce ayristilar:
+ * API'ye sessionId eklendi, worker'in tipinde yoktu ve alan is govdesinden
+ * dusuyordu. Tek tanim, bu sinifin hatalarini derleme zamaninda yakalar.
+ */
+export interface ParseJobData {
+  /** Kaynak dosyanin mutlak yolu. */
+  path: string;
+  /** Hangi korpusa ait; verilmezse "documents". */
+  corpus?: Corpus;
+  /**
+   * Doluysa bu dosya bir SOHBET EKIDIR, resmi evrak degil: analiz ve servis
+   * yonlendirmesi calistirilmaz, yalnizca aranabilir olmasi icin chunk/embed
+   * edilir ve belge kalici olarak bu oturuma baglanir.
+   */
+  sessionId?: string;
+}
+
+export interface ProcessJobData {
+  docId: string;
+  corpus?: Corpus;
+  /** Sohbet ekleri icin true: analiz + yonlendirme atlanir. */
+  skipAnalysis?: boolean;
+}
+
 export const RegulationChunkMetadataSchema = z.object({
   kisim: z.string().nullable(),
   bolum: z.string().nullable(),

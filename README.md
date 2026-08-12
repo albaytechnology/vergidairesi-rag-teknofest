@@ -306,7 +306,7 @@ checksum'ından geçer, geçmezse ham metinden çapraz kontrol edilir, o da yoks
 | `POST /api/upload` | Evrak yükle → hat tetiklenir |
 | `POST /api/chat` | **SSE** — belge kapsamlı, çok turlu |
 | `GET /api/documents/:id/chat` | Sohbet geçmişi |
-| `POST /api/session-upload` (+`/bind`) | Oturuma özel geçici belge |
+| `POST /api/session-upload?sessionId=` | Sohbete referans belge ekle (yönlendirilmez) |
 | `POST /api/response-letter` | Cevap yazısı taslağı (`kaydet:true` → sayı al + kaydet) |
 | `POST /api/response-letter/pdf` · `/docx` | Düzenlenmiş HTML'den PDF · modelden DOCX |
 | `GET /api/documents/:id/letters` | Belge için üretilmiş yazılar |
@@ -432,11 +432,8 @@ değilse) evrak "cevaplandı" görünmez; sıra üretim → işaretleme şeklind
 gelir. `response_letters`'a yalnızca “Kaydet (sayı ver)” denince yazıldığı için,
 yazıyı kaydetmeden yalnızca PDF indiren kullanıcıda ikinci kaynak boş kalırdı.
 
-> **Doğrulama durumu:** `routed → in_progress` geçişi tarayıcıda uçtan uca
-> doğrulandı. `completed` geçişi (PDF dışa alımı) kodda tamam ancak Ollama
-> sunucusuna erişim kesildiği için bu oturumda uçtan uca çalıştırılamadı;
-> bağlantı geldiğinde bir evrak için PDF indirip arşivde “Cevap Yazısı Yazılan”
-> tarafına geçtiğini teyit edin.
+**Kapsam:** Arşiv yalnızca resmî evrakı izler. Sohbete atılan referans belgeler
+`session_id` üzerinden elenir — hiçbir zaman "cevap yazısı bekliyor" görünmezler.
 
 ## Cevap Yazısı Üretimi (Faz 5c)
 
@@ -517,10 +514,21 @@ yalnızca aktif sekme, dolu havuz rozeti, birincil aksiyon butonu ve bölüm ba�
 Sohbetteki kullanıcı balonları da bu yüzden kırmızı değil koyu slate.
 
 **İki tür yükleme, iki ayrı anlam.** `/upload` **resmî evrak** alır: hattan geçer,
-bir servis havuzuna düşer, sayaçları artırır. Belge sohbetindeki **ataç** ise
-*referans* belge alır (ek mevzuat, mükellefin gönderdiği ek): yalnızca o sohbette
-RAG kaynağı olur, havuza **girmez**. Ayrım `session_uploads` tablosuyla yapılır;
-`listDocumentsByService` ve `serviceQueueCounts` bu belgeleri eler.
+bir servis havuzuna düşer, cevap yazısı bekler. Belge sohbetindeki **ataç** ise
+*referans* belge alır (ek mevzuat, mükellefin gönderdiği ek): chunk'lanıp embed
+edilir, yani o sohbette aranabilir olur, ama **analiz ve servis yönlendirmesi hiç
+çalıştırılmaz** — havuza da arşive de girmez.
+
+Ayrım `documents.session_id` sütunuyla, yükleme anında yapılır: `/api/session-upload`
+sessionId'yi parse işiyle birlikte gönderir, worker belgeyi kalıcı olarak o oturuma
+bağlar ve `skipAnalysis` ile hattın analiz adımını atlar.
+
+> İlk tasarımda ayrım `session_uploads` tablosundaki **TTL'li** kayıttan
+> türetiliyordu: ekler yine de yönlendiriliyor, sadece havuz sorgularında
+> gizleniyordu. 12 saat dolunca gizleme kalkıyor ve chat'e atılmış her belge —
+> yönetmeliğin kendisi dahil — servis havuzunda cevap bekleyen bir dilekçe gibi
+> beliriyordu. Kalıcı bir olguyu (bu bir referans belgesidir) geçici bir kayıtla
+> ifade etmek hataydı.
 
 **“Hazır” aranabilir demektir.** Ataç chip'i, belgenin embed edilmemiş chunk'ı
 kalmayana kadar “işleniyor” gösterir. Önce `documents.status = 'parsed'`e bakılıyordu

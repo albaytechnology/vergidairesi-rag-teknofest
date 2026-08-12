@@ -32,7 +32,7 @@ export {
   listResponseLetters,
   getResponseLetter,
   nextLetterNo,
-  registerSessionUpload,
+  markSessionUpload,
   sessionDocumentIds,
   type ChatMessageRow,
   type ResponseLetterRow,

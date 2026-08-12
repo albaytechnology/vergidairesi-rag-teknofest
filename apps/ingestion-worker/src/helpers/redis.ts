@@ -1,21 +1,13 @@
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
-import { config } from "@albay/shared";
+import { config, type ParseJobData, type ProcessJobData } from "@albay/shared";
 
 export const PARSE_QUEUE = "parse";
 export const PROCESS_QUEUE = "process";
 
-export interface ParseJobData {
-  /** Kaynak dosyanin mutlak yolu */
-  path: string;
-  /** Hangi korpusa ait; verilmezse "documents". */
-  corpus?: "documents" | "regulations";
-}
-
-export interface ProcessJobData {
-  docId: string;
-  corpus?: "documents" | "regulations";
-}
+// Is sozlesmesi @albay/shared'da: ureticiler (API, enqueue CLI) ile tuketici
+// ayni tipi gormeli. Eskiden iki yerde ayri tanimliydi ve sessizce ayristilar.
+export type { ParseJobData, ProcessJobData };
 
 /**
  * Redis baglantisini acar. lazyConnect + connect sayesinde Redis kapaliysa

@@ -21,6 +21,8 @@ export {
   type EvrakDocType,
   type ExtractedEntities,
   type IslemTuru,
+  type ParseJobData,
+  type ProcessJobData,
   type LetterBody,
   type LetterDecision,
   type LetterModel,

@@ -152,6 +152,25 @@ export async function migrate(): Promise<void> {
     ALTER TABLE response_letters ADD COLUMN IF NOT EXISTS sayi TEXT;
     CREATE SEQUENCE IF NOT EXISTS response_letter_no_seq START 1;
 
+    -- Faz 5e: sohbete aticlanan belge, KALICI olarak evraktan ayrilir.
+    --
+    -- Once bu ayrim session_uploads tablosundaki TTL'li kayittan turetiliyordu;
+    -- 12 saat dolunca chat ekleri servis havuzlarina ve arsive geri dusuyordu.
+    -- "Bu bir referans belgesi, resmi evrak degil" kalici bir olgudur, gecici
+    -- bir kayit uzerinden ifade edilemez.
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS session_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_documents_session ON documents (session_id);
+    -- Sutun eklenmeden once yuklenmis chat eklerini geriye donuk isaretle ve
+    -- yanlislikla aldiklari servis yonlendirmesini temizle.
+    UPDATE documents d SET session_id = s.session_id
+      FROM session_uploads s
+     WHERE s.document_id = d.id AND d.session_id IS NULL;
+    UPDATE documents
+       SET routed_service = NULL, routed_birim = NULL, routing_confidence = NULL,
+           routing_reasoning = NULL, routing_regulation_refs = NULL,
+           routing_status = 'pending', routing_key = NULL, lifecycle_status = 'new'
+     WHERE session_id IS NOT NULL AND routing_status <> 'pending';
+
     -- Faz 5b: chat oturumuna ozel gecici dokumanlar (ana koleksiyona karismaz)
     CREATE TABLE IF NOT EXISTS session_uploads (
       session_id TEXT NOT NULL,
@@ -534,17 +553,17 @@ export interface ServiceQueueRow {
  * yonlendirilmis dokumanlardan gelir; katalog icin regulationServices() kullanilir.
  */
 /**
- * Servis havuzlarindan oturuma ozel ekleri eleyen kosul.
+ * Servis havuzlarindan ve arsivden oturuma ozel ekleri eleyen kosul.
  *
- * Sohbete aticlanan bir belge (ornegin mukellefin gonderdigi ek mevzuat) hattan
- * normal evrak gibi geciyor ve bir servise yonlendiriliyor. Ama o RESMI EVRAK
- * DEGILDIR: kaydi yapilmis, havuza dusmesi ve sayaci artirmasi gereken bir
- * basvuru degil, yalnizca o sohbetin baglami. Chat tarafi bu belgelere
- * sessionDocumentIds uzerinden eristigi icin bu filtre aramayi etkilemez.
+ * Sohbete aticlanan belge (ek mevzuat, mukellefin gonderdigi ek) RESMI EVRAK
+ * DEGILDIR: havuza dusmesi, sayaci artirmasi ya da cevap yazisi beklemesi
+ * gereken bir basvuru degil, yalnizca o sohbetin baglami.
+ *
+ * Onceden bu ayrim session_uploads'taki TTL'li kayittan turetiliyordu ve 12 saat
+ * dolunca chat ekleri havuzlara geri dusuyordu. Kalici bir olguyu gecici bir
+ * kayitla ifade etmek hataydi; artik documents.session_id sutununa bakiyoruz.
  */
-const OTURUM_EKI_DEGIL = `id NOT IN (
-  SELECT document_id FROM session_uploads WHERE expires_at > now()
-)`;
+const OTURUM_EKI_DEGIL = "session_id IS NULL";
 
 export async function serviceQueueCounts(): Promise<ServiceQueueRow[]> {
   const res = await pool.query<{ servis: string | null; birim: string | null; adet: string }>(
@@ -721,9 +740,15 @@ export async function listArchiveDocuments(
   const res = await pool.query<DocumentDetail & { son_karar: string | null }>(
     `SELECT d.*,
             -- Tamamlanan evrakta hangi kararla cevaplandigi kartta gorunmeli.
-            (SELECT r.decision FROM response_letters r
-              WHERE r.document_id = d.id
-              ORDER BY r.created_at DESC LIMIT 1) AS son_karar
+            -- Once PDF disa alinirken yazilan deger, yoksa kaydedilmis yazidan:
+            -- response_letters'a yalnizca "Kaydet" denince yazildigi icin tek
+            -- basina ona bakmak, PDF'i kaydetmeden indiren kullanicida bos birakir.
+            COALESCE(
+              d.completed_decision,
+              (SELECT r.decision FROM response_letters r
+                WHERE r.document_id = d.id
+                ORDER BY r.created_at DESC LIMIT 1)
+            ) AS son_karar
        FROM documents d
       WHERE d.corpus = 'documents'
         AND d.lifecycle_status ${tamamlandi ? "=" : "<>"} 'completed'
@@ -914,10 +939,25 @@ export async function registerSessionUpload(
   );
 }
 
+/**
+ * Bir sohbetin ek belgeleri.
+ *
+ * Kaynak session_uploads degil documents.session_id: eki yukleyen worker onu
+ * belgenin uzerine yaziyor, dolayisiyla /bind cagrilmasini beklemeye ve TTL'in
+ * dolmasiyla ekin sessizce aranamaz hale gelmesine gerek yok.
+ */
 export async function sessionDocumentIds(sessionId: string): Promise<string[]> {
-  const res = await pool.query<{ document_id: string }>(
-    "SELECT document_id FROM session_uploads WHERE session_id = $1 AND expires_at > now()",
+  const res = await pool.query<{ id: string }>(
+    "SELECT id FROM documents WHERE session_id = $1",
     [sessionId],
   );
-  return res.rows.map((r) => r.document_id);
+  return res.rows.map((r) => r.id);
+}
+
+/** Parse sirasinda: belgeyi bir sohbet ekine baglar (kalici isaret). */
+export async function markSessionUpload(docId: string, sessionId: string): Promise<void> {
+  await pool.query(
+    "UPDATE documents SET session_id = $2, updated_at = now() WHERE id = $1",
+    [docId, sessionId],
+  );
 }

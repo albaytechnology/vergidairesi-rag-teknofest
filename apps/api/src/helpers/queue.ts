@@ -6,14 +6,10 @@
  */
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
-import { config } from "@albay/shared";
+import { config, type ParseJobData } from "@albay/shared";
 
 const PARSE_QUEUE = "parse";
 
-interface ParseJobData {
-  path: string;
-  corpus?: "documents" | "regulations";
-}
 
 let connection: Redis | null = null;
 let parseQueue: Queue<ParseJobData> | null = null;

@@ -18,6 +18,7 @@ import {
   migrate,
   upsertDocument,
   setStatus,
+  markSessionUpload,
   pool,
 } from "@albay/ingestion";
 import {
@@ -86,7 +87,18 @@ async function processFile(job: Job<ParseJobData>): Promise<string> {
       parsedMdPath: mdPath,
       doclingJsonPath: jsonPath,
     });
-    await processQueue?.add("process", { docId: row.id, corpus }, { jobId: row.id });
+
+    // Sohbet eki ise kalici olarak isaretle ve analiz/yonlendirmeyi ATLA:
+    // bu bir basvuru degil, referans belgesi. Yonlendirilirse servis havuzunda
+    // cevap yazisi bekleyen bir dilekce gibi gorunur.
+    const { sessionId } = job.data;
+    if (sessionId) await markSessionUpload(row.id, sessionId);
+
+    await processQueue?.add(
+      "process",
+      { docId: row.id, corpus, skipAnalysis: Boolean(sessionId) },
+      { jobId: row.id },
+    );
     return `parse edildi: ${basename(path)} (${markdown.length} karakter) → hat kuyruguna alindi`;
   } catch (err) {
     await setStatus(row.id, "failed", { error: (err as Error).message });
@@ -105,7 +117,10 @@ const parseWorker = new Worker<ParseJobData>(PARSE_QUEUE, processFile, {
 const pipelineWorker = new Worker<ProcessJobData>(
   PROCESS_QUEUE,
   async (job: Job<ProcessJobData>) => {
-    const sonuc = await processDocument(job.data.docId, { corpus: job.data.corpus });
+    const sonuc = await processDocument(job.data.docId, {
+      corpus: job.data.corpus,
+      skipAnalysis: job.data.skipAnalysis,
+    });
     const hedef =
       sonuc.routingStatus === "routed"
         ? `→ ${sonuc.routedService}`

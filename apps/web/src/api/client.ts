@@ -83,8 +83,9 @@ export const api = {
   /**
    * Oturuma ozel ek belge (chat ataci).
    *
-   * Ana korpusa "resmi evrak" olarak girmez; yalnizca bu sohbette RAG kaynagi
-   * olur. Dosya kuyruga birakilir, parse bitene kadar bind ile yoklanir.
+   * Ana korpusa "resmi evrak" olarak girmez: worker sessionId'yi belgeye
+   * kalici olarak yazar ve analiz/yonlendirmeyi atlar, dolayisiyla belge
+   * hicbir servis havuzuna dusmez. Hazir olmasi uploadStatus ile yoklanir.
    */
   sessionUpload: (sessionId: string, file: File) => {
     const form = new FormData();
@@ -94,12 +95,6 @@ export const api = {
       { method: "POST", body: form },
     );
   },
-
-  sessionUploadBind: (sessionId: string, path: string) =>
-    istek<{ hazir: boolean; documentId?: string; status?: string }>("/api/session-upload/bind", {
-      method: "POST",
-      body: JSON.stringify({ sessionId, path }),
-    }),
 
   uploadStatus: (paths: string[]) =>
     istek<{ durumlar: UploadStatus[] }>(

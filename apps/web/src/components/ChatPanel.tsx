@@ -66,14 +66,13 @@ export function ChatPanel({
   /**
    * Dosyayi oturuma yukler ve ARANABILIR olana kadar yoklar.
    *
-   * Iki ayri sey yapiliyor:
-   *  - bind: belge kaydi olusunca oturuma baglar (idempotent, her turda cagrilir)
-   *  - status: hattin embed adimi bitti mi
+   * Oturuma baglama isini WORKER yapiyor (parse isiyle birlikte sessionId
+   * geliyor), bu yuzden burada yalnizca hattin bitmesini yokluyoruz.
    *
-   * Hazirlik olcutu bilerek bind'in dondurdugu `hazir` DEGIL: o yalnizca parse
-   * edildigini soyluyor ve hat daha chunk/analiz/embed asamasindayken true
-   * donuyor. Erken "hazir" demek, kullanicinin heniz indekslenmemis belgeye
-   * soru sormasina ve "bu bilgi belgede bulunamadi" cevabi almasina yol aciyordu.
+   * Hazirlik olcutu "parse edildi" DEGIL, "embed edildi": parse bayragi hattin
+   * ilk adiminda set ediliyor ve erken "hazir" demek, kullanicinin heniz
+   * indekslenmemis belgeye soru sorup "bu bilgi belgede bulunamadi" cevabi
+   * almasina yol aciyordu.
    */
   async function ekle(file: File) {
     setHata(null);
@@ -88,7 +87,6 @@ export function ChatPanel({
       );
       for (let i = 0; i < YOKLAMA_SINIRI; i++) {
         await bekle(YOKLAMA_MS);
-        await api.sessionUploadBind(sessionId, sonuc.path).catch(() => null);
         const durum = await api.uploadStatus([sonuc.path]).catch(() => null);
         const asama = durum?.durumlar[0]?.asama;
         if (asama === "hazir") {
