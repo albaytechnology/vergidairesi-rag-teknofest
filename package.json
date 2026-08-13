@@ -1,7 +1,11 @@
 {
-  "name": "albay-rag",
+  "name": "albay-vdi-rag",
   "private": true,
   "type": "module",
+  "contributors": [
+    "Cem Tolga Münyas",
+    "Altay Şimşek"
+  ],
   "scripts": {
     "dev": "trap 'kill 0' EXIT INT TERM; pnpm run api & pnpm run worker & pnpm run web & wait",
     "typecheck": "tsc --noEmit && pnpm --filter @albay/web typecheck",

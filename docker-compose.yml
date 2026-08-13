@@ -1,7 +1,7 @@
 services:
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: albay-rag-qdrant
+    container_name: albay-vdi-rag-qdrant
     ports:
       - "6333:6333"   # REST
       - "6334:6334"   # gRPC
@@ -11,7 +11,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: albay-rag-redis
+    container_name: albay-vdi-rag-redis
     ports:
       - "6379:6379"
     volumes:
@@ -21,7 +21,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: albay-rag-postgres
+    container_name: albay-vdi-rag-postgres
     ports:
       - "5432:5432"
     environment:
@@ -34,7 +34,7 @@ services:
 
   docling:
     image: ghcr.io/docling-project/docling-serve:latest
-    container_name: albay-rag-docling
+    container_name: albay-vdi-rag-docling
     ports:
       - "5001:5001"
     environment:
@@ -53,7 +53,7 @@ services:
   # NOT: air-gapped kuruluma gecerken model onceden indirilip volume'a konmali.
   reranker:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
-    container_name: albay-rag-reranker
+    container_name: albay-vdi-rag-reranker
     profiles: ["rerank"]
     ports:
       - "8080:80"

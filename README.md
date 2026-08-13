@@ -24,7 +24,7 @@ ya da tutar uydurulmaz.
 ### 1. Repo ve bağımlılıklar
 
 ```bash
-git clone <repo-url> && cd albay-rag
+git clone <repo-url> && cd albay-vdi-rag
 pnpm install
 cp .env.example .env          # OLLAMA_BASE_URL ve LETTER_* alanlarını doldurun
 ```
