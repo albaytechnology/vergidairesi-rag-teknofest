@@ -1,0 +1,300 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000"
+     font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif">
+  <title>Vergi Dairesi Yapay Zeka Destekli Evrak ve Yazışma Sistemi — Sistem Mimarisi</title>
+
+  <defs>
+    <!-- Ok uclari: dolu (veri akisi) ve acik (cift yonlu) -->
+    <marker id="ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A8F98"/>
+    </marker>
+    <marker id="okK" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D42027"/>
+    </marker>
+
+    <!-- Ikonlar: marka logolari yerine islevi anlatan yalin glifler -->
+    <g id="i-browser" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round">
+      <rect x="1" y="3" width="22" height="17" rx="2.5"/><path d="M1 8h22"/>
+      <circle cx="4.6" cy="5.6" r="0.9" fill="currentColor" stroke="none"/>
+      <circle cx="7.6" cy="5.6" r="0.9" fill="currentColor" stroke="none"/>
+    </g>
+    <g id="i-bolt" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round">
+      <path d="M13 2 L5 13h6l-2 9 10-13h-7z"/>
+    </g>
+    <g id="i-graph" stroke="currentColor" stroke-width="1.6" fill="none">
+      <circle cx="4" cy="6" r="2.6"/><circle cx="20" cy="6" r="2.6"/><circle cx="12" cy="18" r="2.6"/>
+      <path d="M6.4 7.3 L9.9 15.9 M17.6 7.3 L14.1 15.9 M6.6 6h10.8"/>
+    </g>
+    <g id="i-queue" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round">
+      <rect x="2" y="3" width="13" height="5" rx="1.4"/><rect x="2" y="10" width="13" height="5" rx="1.4"/>
+      <rect x="2" y="17" width="13" height="5" rx="1.4"/><path d="M18 6.5h4M18 12.5h4M18 18.5h4"/>
+    </g>
+    <g id="i-db" stroke="currentColor" stroke-width="1.6" fill="none">
+      <ellipse cx="12" cy="5.5" rx="8.5" ry="3.2"/>
+      <path d="M3.5 5.5v13c0 1.8 3.8 3.2 8.5 3.2s8.5-1.4 8.5-3.2v-13"/>
+      <path d="M3.5 12c0 1.8 3.8 3.2 8.5 3.2s8.5-1.4 8.5-3.2"/>
+    </g>
+    <g id="i-cache" stroke="currentColor" stroke-width="1.6" fill="none">
+      <path d="M3.5 6.5c0-1.8 3.8-3.2 8.5-3.2s8.5 1.4 8.5 3.2-3.8 3.2-8.5 3.2S3.5 8.3 3.5 6.5z"/>
+      <path d="M3.5 12.5c0 1.8 3.8 3.2 8.5 3.2s8.5-1.4 8.5-3.2M3.5 6.5v6M20.5 6.5v6"/>
+      <path d="M3.5 18.2c0 1.8 3.8 3.2 8.5 3.2s8.5-1.4 8.5-3.2M3.5 12.5v5.7M20.5 12.5v5.7"/>
+    </g>
+    <g id="i-vector" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round">
+      <path d="M3 21V3M3 21h18"/>
+      <circle cx="8" cy="15" r="1.7" fill="currentColor" stroke="none"/>
+      <circle cx="13" cy="9" r="1.7" fill="currentColor" stroke="none"/>
+      <circle cx="18" cy="12" r="1.7" fill="currentColor" stroke="none"/>
+      <path d="M3 21 L13 9" stroke-dasharray="2.5 2.5"/>
+    </g>
+    <g id="i-doc" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round">
+      <path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5"/><path d="M9 12h7M9 16h7"/>
+    </g>
+    <g id="i-chip" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round">
+      <rect x="5.5" y="5.5" width="13" height="13" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/>
+      <path d="M9 2v3.5M15 2v3.5M9 18.5V22M15 18.5V22M2 9h3.5M2 15h3.5M18.5 9H22M18.5 15H22"/>
+    </g>
+    <g id="i-layers" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round">
+      <path d="M12 2.5 21.5 7 12 11.5 2.5 7z"/><path d="M2.5 12 12 16.5 21.5 12"/><path d="M2.5 17 12 21.5 21.5 17"/>
+    </g>
+    <g id="i-pdf" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round">
+      <path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5"/>
+      <text x="12" y="18.5" font-size="7" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">PDF</text>
+    </g>
+    <g id="i-lock" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round">
+      <rect x="4.5" y="10" width="15" height="11" rx="2.2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+    </g>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#FFFFFF"/>
+
+  <!-- ══ BASLIK ══════════════════════════════════════════════════════ -->
+  <rect x="60" y="38" width="6" height="50" fill="#D42027"/>
+  <text x="82" y="62" font-size="25" font-weight="700" fill="#111111">
+    Vergi Dairesi — Yapay Zeka Destekli Evrak ve Yazışma Sistemi
+  </text>
+  <text x="82" y="85" font-size="13.5" fill="#555555">
+    Sistem Mimarisi · kurum içi (air-gapped) çok-ajanlı RAG · TypeScript monorepo
+  </text>
+
+  <!-- ══ 1 · ISTEMCI ═════════════════════════════════════════════════ -->
+  <rect x="60" y="118" width="1080" height="118" rx="10" fill="#F7F8FA" stroke="#E3E5E9"/>
+  <text x="80" y="140" font-size="11" font-weight="700" fill="#D42027" letter-spacing="1.2">1 · İSTEMCİ</text>
+  <rect x="80" y="150" width="1040" height="70" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(98,172)" color="#D42027"><use href="#i-browser"/></g>
+  <text x="134" y="177" font-size="14.5" font-weight="700" fill="#111111">apps/web — Tarayıcı arayüzü</text>
+  <text x="134" y="199" font-size="12" fill="#555555">React 19 · Vite 7 · Tailwind CSS 4 · TanStack Query 5</text>
+  <text x="1102" y="177" font-size="11.5" fill="#555555" text-anchor="end">Servisler · Yazışma ve Arşiv · Evrak Ekle · Belge ekranı</text>
+  <text x="1102" y="199" font-size="11.5" fill="#555555" text-anchor="end">Göreli /api yolları · SSE ile canlı yanıt akışı</text>
+
+  <!-- istemci → uygulama -->
+  <path d="M600 236 V284" stroke="#D42027" stroke-width="1.8"
+        marker-start="url(#okK)" marker-end="url(#okK)"/>
+  <text x="612" y="266" font-size="11.5" font-weight="600" fill="#D42027">REST + SSE</text>
+
+  <!-- ══ 2 · UYGULAMA KATMANI ════════════════════════════════════════ -->
+  <rect x="60" y="286" width="1080" height="346" rx="10" fill="#F7F8FA" stroke="#E3E5E9"/>
+  <text x="80" y="310" font-size="11" font-weight="700" fill="#D42027" letter-spacing="1.2">2 · UYGULAMA KATMANI</text>
+  <text x="255" y="310" font-size="11" fill="#7A7F87">Node.js 24 · TypeScript · pnpm workspace</text>
+
+  <!-- API -->
+  <rect x="80" y="322" width="330" height="124" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(98,342)" color="#D42027"><use href="#i-bolt"/></g>
+  <text x="132" y="350" font-size="13.5" font-weight="700" fill="#111111">apps/api</text>
+  <text x="132" y="368" font-size="11.5" fill="#7A7F87">Fastify 5</text>
+  <text x="98" y="394" font-size="11.5" fill="#555555">REST uçları + SSE sohbet akışı</text>
+  <text x="98" y="412" font-size="11.5" fill="#555555">Çoklu dosya yükleme (multipart)</text>
+  <text x="98" y="430" font-size="11.5" fill="#555555">Servis havuzları · arşiv · cevap yazısı</text>
+
+  <!-- AGENTS -->
+  <rect x="425" y="322" width="330" height="124" rx="8" fill="#FFFFFF" stroke="#D42027" stroke-width="1.6"/>
+  <g transform="translate(443,342)" color="#D42027"><use href="#i-graph"/></g>
+  <text x="477" y="350" font-size="13.5" font-weight="700" fill="#111111">packages/agents</text>
+  <text x="477" y="368" font-size="11.5" fill="#7A7F87">LangGraph.js 1 — orkestrasyon</text>
+  <text x="443" y="394" font-size="11.5" fill="#555555">router → arama → sentez → denetçi</text>
+  <text x="443" y="412" font-size="11.5" fill="#555555">servis yönlendirme (yönetmelik tabanlı)</text>
+  <text x="443" y="430" font-size="11.5" fill="#555555">cevap yazısı taslağı · belge sohbeti</text>
+
+  <!-- WORKER -->
+  <rect x="770" y="322" width="350" height="124" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(788,342)" color="#D42027"><use href="#i-queue"/></g>
+  <text x="822" y="350" font-size="13.5" font-weight="700" fill="#111111">apps/ingestion-worker</text>
+  <text x="822" y="368" font-size="11.5" fill="#7A7F87">BullMQ 5 — iki aşamalı hat</text>
+  <text x="788" y="394" font-size="11.5" fill="#555555">parse kuyruğu → işleme kuyruğu</text>
+  <text x="788" y="412" font-size="11.5" fill="#555555">bölümleme · analiz · yönlendirme · gömme</text>
+  <text x="788" y="430" font-size="11.5" fill="#555555">HTTP isteği LLM'i beklemez</text>
+
+  <!-- API ↔ agents ↔ worker -->
+  <path d="M410 384 H421" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+  <path d="M755 384 H766" stroke="#8A8F98" stroke-width="1.5" marker-start="url(#ok)" marker-end="url(#ok)"/>
+
+  <!-- kutuphaneler -->
+  <text x="80" y="470" font-size="11" font-weight="700" fill="#7A7F87" letter-spacing="0.8">PAYLAŞILAN KÜTÜPHANELER</text>
+
+  <rect x="80" y="478" width="340" height="60" rx="7" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <text x="96" y="500" font-size="12.5" font-weight="700" fill="#111111">packages/llm</text>
+  <text x="96" y="518" font-size="10.8" fill="#555555">Ollama istemcisi · evrak analizi</text>
+  <text x="96" y="532" font-size="10.8" fill="#555555">TCKN/VKN checksum doğrulaması</text>
+
+  <rect x="430" y="478" width="340" height="60" rx="7" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <text x="446" y="500" font-size="12.5" font-weight="700" fill="#111111">packages/retrieval</text>
+  <text x="446" y="518" font-size="10.8" fill="#555555">Qdrant hibrit arama: yoğun + BM25</text>
+  <text x="446" y="532" font-size="10.8" fill="#555555">RRF füzyonu · isteğe bağlı yeniden sıralama</text>
+
+  <rect x="780" y="478" width="340" height="60" rx="7" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <text x="796" y="500" font-size="12.5" font-weight="700" fill="#111111">packages/chunking</text>
+  <text x="796" y="518" font-size="10.8" fill="#555555">yapısal bölümleme (başlık · tablo · sayfa)</text>
+  <text x="796" y="532" font-size="10.8" fill="#555555">yönetmelik için madde bazlı bölümleyici</text>
+
+  <rect x="80" y="546" width="340" height="60" rx="7" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <text x="96" y="568" font-size="12.5" font-weight="700" fill="#111111">packages/ingestion</text>
+  <text x="96" y="586" font-size="10.8" fill="#555555">Docling istemcisi · PostgreSQL şeması</text>
+  <text x="96" y="600" font-size="10.8" fill="#555555">belge yaşam döngüsü kayıtları</text>
+
+  <rect x="430" y="546" width="340" height="60" rx="7" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <text x="446" y="568" font-size="12.5" font-weight="700" fill="#111111">packages/letter</text>
+  <text x="446" y="586" font-size="10.8" fill="#555555">resmî yazı şablonu (A4, 2646 s. CB Kararı)</text>
+  <text x="446" y="600" font-size="10.8" fill="#555555">Playwright/Chromium → PDF · docx → DOCX</text>
+
+  <rect x="780" y="546" width="340" height="60" rx="7" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <text x="796" y="568" font-size="12.5" font-weight="700" fill="#111111">packages/shared</text>
+  <text x="796" y="586" font-size="10.8" fill="#555555">zod ile doğrulanan yapılandırma</text>
+  <text x="796" y="600" font-size="10.8" fill="#555555">ortak tipler · kuyruk iş sözleşmeleri</text>
+
+  <!-- Uygulama ↔ altyapi: her altyapi kutusunun tam ustunden dikey koridor.
+       Capraz cizgiler hangi bilesenin nereye bagli oldugunu okunmaz kiliyordu. -->
+  <path d="M202 632 V686" stroke="#8A8F98" stroke-width="1.5" marker-start="url(#ok)" marker-end="url(#ok)"/>
+  <text x="212" y="664" font-size="10.5" fill="#555555">belge · chunk · sohbet · yazı</text>
+
+  <path d="M467 632 V686" stroke="#8A8F98" stroke-width="1.5" marker-start="url(#ok)" marker-end="url(#ok)"/>
+  <text x="477" y="664" font-size="10.5" fill="#555555">hibrit arama · RRF</text>
+
+  <path d="M732 632 V686" stroke="#8A8F98" stroke-width="1.5" marker-start="url(#ok)" marker-end="url(#ok)"/>
+  <text x="742" y="664" font-size="10.5" fill="#555555">iş kuyruğu · tüketim</text>
+
+  <path d="M997 632 V686" stroke="#8A8F98" stroke-width="1.5" marker-start="url(#ok)" marker-end="url(#ok)"/>
+  <text x="1007" y="664" font-size="10.5" fill="#555555">PDF/DOCX → Markdown</text>
+
+  <!-- ══ 3 · ALTYAPI ═════════════════════════════════════════════════ -->
+  <rect x="60" y="690" width="1080" height="180" rx="10" fill="#F7F8FA" stroke="#E3E5E9"/>
+  <text x="80" y="714" font-size="11" font-weight="700" fill="#D42027" letter-spacing="1.2">3 · ALTYAPI</text>
+  <text x="185" y="714" font-size="11" fill="#7A7F87">Docker Compose · kurum sunucusunda</text>
+
+  <rect x="80" y="726" width="245" height="124" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(98,746)" color="#D42027"><use href="#i-db"/></g>
+  <text x="132" y="757" font-size="13" font-weight="700" fill="#111111">PostgreSQL 16</text>
+  <text x="98" y="790" font-size="11" fill="#555555">Belge kayıtları, chunk'lar,</text>
+  <text x="98" y="806" font-size="11" fill="#555555">yönlendirme kararları, sohbet</text>
+  <text x="98" y="822" font-size="11" fill="#555555">geçmişi, üretilen yazılar</text>
+
+  <rect x="345" y="726" width="245" height="124" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(363,746)" color="#D42027"><use href="#i-vector"/></g>
+  <text x="397" y="757" font-size="13" font-weight="700" fill="#111111">Qdrant</text>
+  <text x="363" y="790" font-size="11" fill="#555555">İki koleksiyon: evrak ve</text>
+  <text x="363" y="806" font-size="11" fill="#555555">yönetmelik. Yoğun vektör +</text>
+  <text x="363" y="822" font-size="11" fill="#555555">seyrek BM25, RRF ile birleşik</text>
+
+  <rect x="610" y="726" width="245" height="124" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(628,746)" color="#D42027"><use href="#i-cache"/></g>
+  <text x="662" y="757" font-size="13" font-weight="700" fill="#111111">Redis 7</text>
+  <text x="628" y="790" font-size="11" fill="#555555">BullMQ kuyrukları: parse ve</text>
+  <text x="628" y="806" font-size="11" fill="#555555">işleme. Yeniden deneme ve</text>
+  <text x="628" y="822" font-size="11" fill="#555555">tekrarsız iş kimliği</text>
+
+  <rect x="875" y="726" width="245" height="124" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(893,746)" color="#D42027"><use href="#i-doc"/></g>
+  <text x="927" y="757" font-size="13" font-weight="700" fill="#111111">Docling</text>
+  <text x="893" y="790" font-size="11" fill="#555555">PDF/DOCX/XLSX → yapısal</text>
+  <text x="893" y="806" font-size="11" fill="#555555">Markdown + sayfa haritası</text>
+  <text x="893" y="822" font-size="11" fill="#555555">(yerleşim duyarlı ayrıştırma)</text>
+
+  <!-- ══ 4 · UZAK MODEL SUNUCUSU ═════════════════════════════════════ -->
+  <rect x="1180" y="118" width="360" height="752" rx="10" fill="#FDF4F4" stroke="#D42027"
+        stroke-width="1.4" stroke-dasharray="7 5"/>
+  <text x="1200" y="146" font-size="11" font-weight="700" fill="#D42027" letter-spacing="1.2">4 · UZAK MODEL SUNUCUSU</text>
+  <text x="1200" y="168" font-size="13.5" font-weight="700" fill="#111111">Ollama</text>
+  <text x="1200" y="187" font-size="11.5" fill="#555555">Kurum ağındaki GPU sunucusu · HTTP</text>
+
+  <!-- qwen -->
+  <rect x="1200" y="204" width="320" height="216" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(1218,224)" color="#D42027"><use href="#i-chip"/></g>
+  <text x="1252" y="235" font-size="13" font-weight="700" fill="#111111">qwen2.5:14b-instruct</text>
+  <text x="1252" y="252" font-size="11" fill="#7A7F87">Üretken model — metni anlar ve yazar</text>
+  <line x1="1218" y1="266" x2="1502" y2="266" stroke="#EDEEF1"/>
+  <text x="1218" y="288" font-size="11.5" fill="#111111" font-weight="600">Evrak analizi</text>
+  <text x="1218" y="304" font-size="11" fill="#555555">konu, özet, işlem türü, tutar/tarih/VKN</text>
+  <text x="1218" y="328" font-size="11.5" fill="#111111" font-weight="600">Servis yönlendirme</text>
+  <text x="1218" y="344" font-size="11" fill="#555555">yönetmelik maddelerine dayalı karar</text>
+  <text x="1218" y="368" font-size="11.5" fill="#111111" font-weight="600">Sohbet ve cevap yazısı</text>
+  <text x="1218" y="384" font-size="11" fill="#555555">belge kapsamlı yanıt, resmî yazı gövdesi</text>
+  <text x="1218" y="406" font-size="10.5" fill="#7A7F87">JSON şema ile yapısal çıktı · sıcaklık 0</text>
+
+  <!-- bge -->
+  <rect x="1200" y="436" width="320" height="150" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <g transform="translate(1218,456)" color="#D42027"><use href="#i-layers"/></g>
+  <text x="1252" y="467" font-size="13" font-weight="700" fill="#111111">bge-m3</text>
+  <text x="1252" y="484" font-size="11" fill="#7A7F87">Gömme modeli — metni vektöre çevirir</text>
+  <line x1="1218" y1="498" x2="1502" y2="498" stroke="#EDEEF1"/>
+  <text x="1218" y="520" font-size="11" fill="#555555">1024 boyutlu yoğun vektör üretir;</text>
+  <text x="1218" y="536" font-size="11" fill="#555555">hem belge parçaları hem de arama</text>
+  <text x="1218" y="552" font-size="11" fill="#555555">sorguları aynı uzaya yerleşir.</text>
+  <text x="1218" y="572" font-size="10.5" fill="#7A7F87">Çok dilli · Türkçe metinde güçlü</text>
+
+  <!-- konusma bicimi -->
+  <rect x="1200" y="602" width="320" height="118" rx="8" fill="#FFFFFF" stroke="#E3E5E9"/>
+  <text x="1218" y="626" font-size="12" font-weight="700" fill="#111111">Nasıl konuşuyorlar?</text>
+  <text x="1218" y="648" font-size="11" fill="#555555">packages/llm → HTTP/JSON → Ollama</text>
+  <text x="1218" y="666" font-size="11" fill="#555555">/api/chat · /api/embeddings</text>
+  <text x="1218" y="688" font-size="11" fill="#555555">Sohbet yanıtı NDJSON olarak parça</text>
+  <text x="1218" y="704" font-size="11" fill="#555555">parça akar, API bunu SSE'ye çevirir.</text>
+
+  <!-- air-gapped -->
+  <rect x="1200" y="736" width="320" height="114" rx="8" fill="#FFFFFF" stroke="#D42027" stroke-width="1.3"/>
+  <g transform="translate(1218,756)" color="#D42027"><use href="#i-lock"/></g>
+  <text x="1252" y="772" font-size="12" font-weight="700" fill="#111111">Veri kurum dışına çıkmaz</text>
+  <text x="1218" y="800" font-size="11" fill="#555555">Modeller kurum ağında çalışır; hiçbir</text>
+  <text x="1218" y="816" font-size="11" fill="#555555">bulut servisi kullanılmaz. Mükellef</text>
+  <text x="1218" y="832" font-size="11" fill="#555555">verisi (VKN, tutar, adres) yerelde kalır.</text>
+
+  <!-- uygulama ↔ ollama: tek baglanti, protokol panelde anlatiliyor -->
+  <text x="1160" y="428" font-size="10" font-weight="600" fill="#D42027" text-anchor="middle">HTTP</text>
+  <path d="M1144 442 H1176" stroke="#D42027" stroke-width="1.8" marker-start="url(#okK)" marker-end="url(#okK)"/>
+
+  <!-- ══ AKIS SERIDI ═════════════════════════════════════════════════ -->
+  <text x="60" y="908" font-size="11" font-weight="700" fill="#D42027" letter-spacing="1.2">UÇTAN UCA AKIŞ</text>
+
+  <g font-size="11" fill="#111111" text-anchor="middle">
+    <rect x="60"  y="920" width="150" height="40" rx="20" fill="#FDECEC" stroke="#D42027"/>
+    <text x="135" y="937">Evrak girişi</text><text x="135" y="951" font-size="9.5" fill="#7A7F87">Evrak Ekle</text>
+    <path d="M214 940 h10" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+
+    <rect x="228" y="920" width="150" height="40" rx="20" fill="#FFFFFF" stroke="#E3E5E9"/>
+    <text x="303" y="937">Ayrıştırma</text><text x="303" y="951" font-size="9.5" fill="#7A7F87">Docling</text>
+    <path d="M382 940 h10" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+
+    <rect x="396" y="920" width="150" height="40" rx="20" fill="#FFFFFF" stroke="#E3E5E9"/>
+    <text x="471" y="937">Bölümleme</text><text x="471" y="951" font-size="9.5" fill="#7A7F87">chunking</text>
+    <path d="M550 940 h10" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+
+    <rect x="564" y="920" width="150" height="40" rx="20" fill="#FFFFFF" stroke="#E3E5E9"/>
+    <text x="639" y="937">Analiz</text><text x="639" y="951" font-size="9.5" fill="#7A7F87">qwen2.5</text>
+    <path d="M718 940 h10" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+
+    <rect x="732" y="920" width="150" height="40" rx="20" fill="#FFFFFF" stroke="#E3E5E9"/>
+    <text x="807" y="937">Yönlendirme</text><text x="807" y="951" font-size="9.5" fill="#7A7F87">yönetmelik + arama</text>
+    <path d="M886 940 h10" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+
+    <rect x="900" y="920" width="150" height="40" rx="20" fill="#FFFFFF" stroke="#E3E5E9"/>
+    <text x="975" y="937">Gömme</text><text x="975" y="951" font-size="9.5" fill="#7A7F87">bge-m3 → Qdrant</text>
+    <path d="M1054 940 h10" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+
+    <rect x="1068" y="920" width="150" height="40" rx="20" fill="#FFFFFF" stroke="#E3E5E9"/>
+    <text x="1143" y="937">Servis havuzu</text><text x="1143" y="951" font-size="9.5" fill="#7A7F87">arşiv takibi</text>
+    <path d="M1222 940 h10" stroke="#8A8F98" stroke-width="1.5" marker-end="url(#ok)"/>
+
+    <rect x="1236" y="920" width="150" height="40" rx="20" fill="#FFFFFF" stroke="#E3E5E9"/>
+    <text x="1311" y="937">Belge sohbeti</text><text x="1311" y="951" font-size="9.5" fill="#7A7F87">SSE · kaynaklı</text>
+    <path d="M1390 940 h10" stroke="#D42027" stroke-width="1.5" marker-end="url(#okK)"/>
+
+    <rect x="1404" y="920" width="136" height="40" rx="20" fill="#FDECEC" stroke="#D42027"/>
+    <text x="1472" y="937">Cevap yazısı</text><text x="1472" y="951" font-size="9.5" fill="#7A7F87">PDF · DOCX</text>
+  </g>
+</svg>
