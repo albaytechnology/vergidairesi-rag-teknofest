@@ -32,7 +32,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(404).send({ error: "Belge bulunamadi" });
     }
 
-    sseBaslat(reply);
+    startSse(reply);
 
     // Cok turlu hafiza: gecmis yalnizca belge bazli sohbette tutulur —
     // korpus genelinde kalici bir "oturum" kavrami yok.
@@ -50,12 +50,12 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       for await (const ev of askStream(question, { docId: documentId, extraDocIds, history })) {
         if (ev.type === "done") cevap = ev.answer;
         if (ev.type === "sources") kaynaklar = ev.sources;
-        sseGonder(reply, ev);
+        sendSse(reply, ev);
         // Istemci baglantiyi kaparsa uretimi surdurmenin anlami yok
         if (reply.raw.destroyed) break;
       }
     } catch (err) {
-      sseGonder(reply, { type: "error", message: (err as Error).message });
+      sendSse(reply, { type: "error", message: (err as Error).message });
     }
 
     // Soru ve cevap birlikte yazilir; akis yarida kesilirse hicbiri yazilmaz,
@@ -73,7 +73,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 }
 
-function sseBaslat(reply: FastifyReply): void {
+function startSse(reply: FastifyReply): void {
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -84,6 +84,6 @@ function sseBaslat(reply: FastifyReply): void {
   reply.raw.flushHeaders?.();
 }
 
-function sseGonder(reply: FastifyReply, event: ChatEvent): void {
+function sendSse(reply: FastifyReply, event: ChatEvent): void {
   reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
 }

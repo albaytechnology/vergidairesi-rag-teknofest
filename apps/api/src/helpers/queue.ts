@@ -31,6 +31,17 @@ export async function getParseQueue(): Promise<Queue<ParseJobData>> {
   return parseQueue;
 }
 
+/**
+ * Redis erisilebilirlik kontrolu (readiness probe icin).
+ *
+ * Kuyrugu (dolayisiyla baglantiyi) hazirlar ve PING atar; Redis kapaliysa
+ * firlar. Boylece /api/ready hattin is ekleyebilir durumda oldugunu dogrular.
+ */
+export async function pingRedis(): Promise<void> {
+  await getParseQueue();
+  await connection!.ping();
+}
+
 export async function closeQueues(): Promise<void> {
   await parseQueue?.close();
   connection?.disconnect();

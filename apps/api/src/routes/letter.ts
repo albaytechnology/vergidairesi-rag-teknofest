@@ -141,7 +141,7 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
       if (parsed.data.docId) {
         await setLifecycleStatus(parsed.data.docId, "completed", parsed.data.karar);
       }
-      return dosyaGonder(reply, pdf, "application/pdf", parsed.data.dosyaAdi ?? "cevap-yazisi.pdf");
+      return sendFile(reply, pdf, "application/pdf", parsed.data.dosyaAdi ?? "cevap-yazisi.pdf");
     } catch (err) {
       // Chromium kurulu degilse burasi calisir — mesaj kurulum komutunu icerir.
       return reply.code(503).send({ error: (err as Error).message });
@@ -154,7 +154,7 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
       return reply.code(400).send({ error: "Gecersiz istek", detay: parsed.error.issues });
     }
     const buf = await letterToDocx(parsed.data.model);
-    return dosyaGonder(
+    return sendFile(
       reply,
       buf,
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -163,7 +163,7 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
   });
 }
 
-function dosyaGonder(reply: FastifyReply, buf: Buffer, tip: string, ad: string) {
+function sendFile(reply: FastifyReply, buf: Buffer, tip: string, ad: string) {
   return reply
     .header("Content-Type", tip)
     .header("Content-Disposition", `attachment; filename="${encodeURIComponent(ad)}"`)

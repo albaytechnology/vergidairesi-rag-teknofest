@@ -21,7 +21,7 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
       // service=belirlenemedi -> yonlendirilememis havuzu
       const servis = !service || service === "belirlenemedi" ? null : service;
       const rows = await listDocumentsByService(servis, Number(limit ?? 100));
-      return { documents: rows.map(ozet) };
+      return { documents: rows.map(toSummary) };
     },
   );
 
@@ -40,7 +40,7 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
       archiveCounts(),
     ]);
     return {
-      documents: rows.map((r) => ({ ...ozet(r), sonKarar: r.son_karar })),
+      documents: rows.map((r) => ({ ...toSummary(r), sonKarar: r.son_karar })),
       sayilar,
     };
   });
@@ -120,7 +120,7 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
     const doc = await getDocumentDetail(req.params.id);
     if (!doc) return reply.code(404).send({ error: "Belge bulunamadi" });
     const history = await getChatHistory(doc.id);
-    return { document: { ...ozet(doc), path: doc.path }, chat: history };
+    return { document: { ...toSummary(doc), path: doc.path }, chat: history };
   });
 
   /** Orijinal dosyayi (PDF) arayuzde gostermek icin. */
@@ -170,7 +170,7 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
            WHERE id = $1`,
           [doc.id, req.body.servis, req.body.gerekce ?? "Servis calisani tarafindan elle atandi"],
         );
-        return { document: ozet((await getDocumentDetail(doc.id))!), manuel: true };
+        return { document: toSummary((await getDocumentDetail(doc.id))!), manuel: true };
       }
 
       const metin = [
@@ -181,7 +181,7 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
       const sonuc = await routeDocument({ metin, aramaSorgusu: doc.doc_subject ?? doc.filename });
       await saveRoutingDecision(doc.id, sonuc.decision);
       return {
-        document: ozet((await getDocumentDetail(doc.id))!),
+        document: toSummary((await getDocumentDetail(doc.id))!),
         karar: formatRoutingDecision(sonuc.decision, sonuc.hits),
         trace: sonuc.trace,
       };
@@ -192,7 +192,7 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
 type Detay = Awaited<ReturnType<typeof getDocumentDetail>>;
 
 /** Arayuzun ozet kartinda gosterdigi alanlar. */
-function ozet(d: NonNullable<Detay>) {
+function toSummary(d: NonNullable<Detay>) {
   return {
     id: d.id,
     filename: d.filename,
