@@ -14,39 +14,39 @@ import type { DocumentSummary } from "../api/types.ts";
  * Kaynak /api/archive: servise gore degil yasam dongusune gore listeler ve
  * sohbete aticlanan ek belgeleri (session_id dolu olanlar) zaten eler.
  */
-export interface Evraklar {
+export interface DocumentBuckets {
   /** Uzerinde calisilmis, cevabi henuz yazilmamis evrak — sol serit. */
-  acikIsler: DocumentSummary[];
+  inProgress: DocumentSummary[];
   /** Cevap yazisi disari alinmis evrak — sol seridin alt grubu. */
-  cevaplananlar: DocumentSummary[];
+  answered: DocumentSummary[];
   /** Henuz acilmamis evrak — ana ekrandaki oneri kartlari. */
-  oneriler: DocumentSummary[];
-  yukleniyor: boolean;
-  hata: unknown;
+  suggestions: DocumentSummary[];
+  isLoading: boolean;
+  error: unknown;
 }
 
-export function useEvraklar(): Evraklar {
-  const bekleyen = useQuery({
+export function useDocuments(): DocumentBuckets {
+  const pending = useQuery({
     queryKey: ["archive", false],
     queryFn: () => api.archive(false),
     refetchInterval: 20_000,
   });
-  const cevaplanan = useQuery({
+  const answered = useQuery({
     queryKey: ["archive", true],
     queryFn: () => api.archive(true),
     refetchInterval: 20_000,
   });
 
-  const acilmamis = bekleyen.data?.documents ?? [];
+  const pendingDocs = pending.data?.documents ?? [];
 
   return {
-    acikIsler: acilmamis.filter((d) => d.yasamDongusu === "in_progress"),
-    cevaplananlar: cevaplanan.data?.documents ?? [],
-    oneriler: acilmamis.filter((d) => d.yasamDongusu !== "in_progress"),
-    yukleniyor: bekleyen.isLoading || cevaplanan.isLoading,
-    hata: bekleyen.error ?? cevaplanan.error,
+    inProgress: pendingDocs.filter((d) => d.yasamDongusu === "in_progress"),
+    answered: answered.data?.documents ?? [],
+    suggestions: pendingDocs.filter((d) => d.yasamDongusu !== "in_progress"),
+    isLoading: pending.isLoading || answered.isLoading,
+    error: pending.error ?? answered.error,
   };
 }
 
 /** Kart ve serit basliklarinda ayni sirayla denenen ad. */
-export const evrakBasligi = (d: DocumentSummary): string => d.konu ?? d.filename;
+export const documentTitle = (d: DocumentSummary): string => d.konu ?? d.filename;

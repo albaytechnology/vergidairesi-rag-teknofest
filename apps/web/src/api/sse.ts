@@ -34,33 +34,33 @@ export async function* streamChat(input: ChatStreamInput): AsyncGenerator<ChatEv
 
   if (!res.ok || !res.body) {
     // Hata yolunda sunucu SSE degil JSON dondurur.
-    let mesaj = `Sohbet başlatılamadı (HTTP ${res.status})`;
+    let message = `Sohbet başlatılamadı (HTTP ${res.status})`;
     try {
-      const govde = (await res.json()) as { error?: string };
-      if (govde.error) mesaj = govde.error;
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
     } catch {
       /* govde okunamadi — genel mesaj kalir */
     }
-    yield { type: "error", message: mesaj };
+    yield { type: "error", message };
     return;
   }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let tampon = "";
+  let buffer = "";
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      tampon += decoder.decode(value, { stream: true });
+      buffer += decoder.decode(value, { stream: true });
 
       // Cerceveler bos satirla ayrilir; son parca yarim kalmis olabilir.
-      const cerceveler = tampon.split("\n\n");
-      tampon = cerceveler.pop() ?? "";
-      for (const cerceve of cerceveler) {
-        const olay = cerceveyiCoz(cerceve);
-        if (olay) yield olay;
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const event = parseFrame(frame);
+        if (event) yield event;
       }
     }
   } finally {
@@ -69,15 +69,15 @@ export async function* streamChat(input: ChatStreamInput): AsyncGenerator<ChatEv
   }
 }
 
-function cerceveyiCoz(cerceve: string): ChatEvent | null {
-  const dataSatiri = cerceve
+function parseFrame(frame: string): ChatEvent | null {
+  const dataLine = frame
     .split("\n")
     .find((s) => s.startsWith("data:"))
     ?.slice(5)
     .trim();
-  if (!dataSatiri) return null;
+  if (!dataLine) return null;
   try {
-    return JSON.parse(dataSatiri) as ChatEvent;
+    return JSON.parse(dataLine) as ChatEvent;
   } catch {
     return null;
   }

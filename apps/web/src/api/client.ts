@@ -13,9 +13,13 @@ import type {
  * Tum istekler GORELI yol kullanir: dev'de Vite /api'yi Fastify'a vekiller,
  * uretimde arayuz API ile ayni kokten servis edilir. Boylece ortama gore
  * degisen bir taban URL yapilandirmasi gerekmiyor.
+ *
+ * NOT: govde alan adlari (karar, gerekce, muhatap…) sunucu sozlesmesidir ve
+ * Turkce kalir; burada Ingilizcelestirilen sey yalnizca istemci tarafindaki
+ * fonksiyon ve parametre adlaridir.
  */
-async function istek<T>(yol: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(yol, {
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
     ...init,
     headers: {
       ...(init?.body && !(init.body instanceof FormData)
@@ -24,15 +28,15 @@ async function istek<T>(yol: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  if (!res.ok) throw new Error(await hataMesaji(res));
+  if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()) as T;
 }
 
 /** Sunucunun yapisal hatasini kullaniciya gosterilebilir tek cumleye indirger. */
-async function hataMesaji(res: Response): Promise<string> {
+async function errorMessage(res: Response): Promise<string> {
   try {
-    const govde = (await res.json()) as { error?: string; detay?: unknown };
-    if (govde.error) return govde.error;
+    const body = (await res.json()) as { error?: string; detay?: unknown };
+    if (body.error) return body.error;
   } catch {
     /* JSON degilse asagidaki genel mesaja duser */
   }
@@ -40,40 +44,40 @@ async function hataMesaji(res: Response): Promise<string> {
 }
 
 export const api = {
-  services: () => istek<ServicesResponse>("/api/services"),
+  services: () => request<ServicesResponse>("/api/services"),
 
-  documents: (servis: string | null) =>
-    istek<{ documents: DocumentSummary[] }>(
-      `/api/documents?service=${encodeURIComponent(servis ?? "belirlenemedi")}`,
+  documents: (service: string | null) =>
+    request<{ documents: DocumentSummary[] }>(
+      `/api/documents?service=${encodeURIComponent(service ?? "belirlenemedi")}`,
     ),
 
   /** Yazisma ve Arsiv paneli — servise gore degil, yasam dongusune gore listeler. */
-  archive: (tamamlanan: boolean) =>
-    istek<ArchiveResponse>(`/api/archive?durum=${tamamlanan ? "completed" : "pending"}`),
+  archive: (completed: boolean) =>
+    request<ArchiveResponse>(`/api/archive?durum=${completed ? "completed" : "pending"}`),
 
   /** "Calisan belgeyi acti" isareti; durum yalnizca ileri gider. */
   markOpened: (id: string) =>
-    istek<{ ok: boolean }>(`/api/documents/${id}/open`, { method: "POST" }),
+    request<{ ok: boolean }>(`/api/documents/${id}/open`, { method: "POST" }),
 
   document: (id: string) =>
-    istek<{ document: DocumentSummary & { path: string }; chat: ChatMessage[] }>(
+    request<{ document: DocumentSummary & { path: string }; chat: ChatMessage[] }>(
       `/api/documents/${id}`,
     ),
 
-  documentText: (id: string) => istek<{ text: string }>(`/api/documents/${id}/text`),
+  documentText: (id: string) => request<{ text: string }>(`/api/documents/${id}/text`),
 
-  chatHistory: (id: string) => istek<{ messages: ChatMessage[] }>(`/api/documents/${id}/chat`),
+  chatHistory: (id: string) => request<{ messages: ChatMessage[] }>(`/api/documents/${id}/chat`),
 
-  reroute: (id: string, servis?: string, gerekce?: string) =>
-    istek<{ document: DocumentSummary }>(`/api/documents/${id}/reroute`, {
+  reroute: (id: string, service?: string, reason?: string) =>
+    request<{ document: DocumentSummary }>(`/api/documents/${id}/reroute`, {
       method: "POST",
-      body: JSON.stringify(servis ? { servis, gerekce } : {}),
+      body: JSON.stringify(service ? { servis: service, gerekce: reason } : {}),
     }),
 
   upload: (files: File[]) => {
     const form = new FormData();
     for (const f of files) form.append("file", f);
-    return istek<{
+    return request<{
       kuyruga_eklenen: number;
       dosyalar: { path: string; filename: string }[];
       reddedilen: { filename: string; sebep: string }[];
@@ -90,56 +94,56 @@ export const api = {
   sessionUpload: (sessionId: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return istek<{ kuyruga_eklendi: boolean; path: string; filename: string }>(
+    return request<{ kuyruga_eklendi: boolean; path: string; filename: string }>(
       `/api/session-upload?sessionId=${encodeURIComponent(sessionId)}`,
       { method: "POST", body: form },
     );
   },
 
   uploadStatus: (paths: string[]) =>
-    istek<{ durumlar: UploadStatus[] }>(
+    request<{ durumlar: UploadStatus[] }>(
       `/api/documents/status?paths=${encodeURIComponent(paths.join("\n"))}`,
     ),
 
-  draftLetter: (girdi: {
+  draftLetter: (input: {
     docId: string;
     karar: LetterDecision;
     gerekce?: string;
     muhatap?: { ad?: string; tur?: "kisi" | "kurum"; adres?: string; vknTckn?: string };
     kaydet?: boolean;
   }) =>
-    istek<LetterDraftResponse>("/api/response-letter", {
+    request<LetterDraftResponse>("/api/response-letter", {
       method: "POST",
-      body: JSON.stringify(girdi),
+      body: JSON.stringify(input),
     }),
 
   letters: (id: string) =>
-    istek<{
+    request<{
       letters: { id: string; karar: string; gerekce: string | null; sayi: string | null; createdAt: string }[];
     }>(`/api/documents/${id}/letters`),
 
   /** PDF/DOCX ikili doner — JSON degil, blob olarak indirilir. */
   letterFile: async (
-    bicim: "pdf" | "docx",
-    govde: { html: string; docId?: string; karar?: LetterDecision } | { model: LetterModel },
-    dosyaAdi: string,
+    format: "pdf" | "docx",
+    body: { html: string; docId?: string; karar?: LetterDecision } | { model: LetterModel },
+    filename: string,
   ): Promise<Blob> => {
-    const res = await fetch(`/api/response-letter/${bicim}`, {
+    const res = await fetch(`/api/response-letter/${format}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...govde, dosyaAdi }),
+      body: JSON.stringify({ ...body, dosyaAdi: filename }),
     });
-    if (!res.ok) throw new Error(await hataMesaji(res));
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.blob();
   },
 };
 
 /** Blob'u tarayiciya indirtir. */
-export function indir(blob: Blob, dosyaAdi: string): void {
+export function download(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = dosyaAdi;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }

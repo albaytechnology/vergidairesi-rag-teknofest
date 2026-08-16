@@ -1,5 +1,5 @@
 import { Link, useMatch, useNavigate } from "react-router-dom";
-import { evrakBasligi, useEvraklar } from "../hooks/useEvraklar.ts";
+import { documentTitle, useDocuments } from "../hooks/useDocuments.ts";
 import type { DocumentSummary } from "../api/types.ts";
 
 /**
@@ -8,21 +8,21 @@ import type { DocumentSummary } from "../api/types.ts";
  * YER TUTUCU: projede henuz kimlik dogrulama yok. Buraya bakan tek yer burasi
  * oldugu icin, oturum eklendiginde yalnizca bu sabit degistirilecek.
  */
-const KULLANICI = { ad: "M. Kaya", bas: "MK", daire: "İzmir Vergi Dairesi" };
+const USER = { name: "M. Kaya", initials: "MK", office: "İzmir Vergi Dairesi" };
 
 /**
  * Sol serit — her ekranda sabit.
  *
- * Yalnizca ETKILESIME GIRILMIS evrak listelenir (bkz. useEvraklar): burasi bir
+ * Yalnizca ETKILESIME GIRILMIS evrak listelenir (bkz. useDocuments): burasi bir
  * evrak havuzu degil sohbet gecmisidir; tum evraki dokmek gecmisi kullanilamaz
  * hale getirirdi. Acilmamis evrak ana ekranda oneri karti olarak durur.
  */
 export function Sidebar() {
   // Serit rotalarin DISINDA duruyor (her ekranda sabit), bu yuzden aktif evrak
   // useParams ile degil yolun kendisiyle bulunur.
-  const docId = useMatch("/evrak/:docId/*")?.params.docId;
+  const docId = useMatch("/documents/:docId/*")?.params.docId;
   const navigate = useNavigate();
-  const { acikIsler, cevaplananlar } = useEvraklar();
+  const { inProgress, answered } = useDocuments();
 
   return (
     <aside className="flex w-[272px] flex-[0_0_272px] flex-col border-r border-cizgi bg-panel">
@@ -60,20 +60,28 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2.5 pt-1.5 pb-4">
-        <GrupBasligi renk="bg-gib" etiket="Cevap bekleyen" adet={acikIsler.length} ilk />
-        <Liste belgeler={acikIsler} aktifId={docId} bosluk="Açtığınız evrak burada birikir." />
+        <GroupHeader color="bg-gib" label="Cevap bekleyen" count={inProgress.length} first />
+        <DocumentList
+          documents={inProgress}
+          activeId={docId}
+          emptyText="Açtığınız evrak burada birikir."
+        />
 
-        <GrupBasligi renk="bg-cizgi-5" etiket="Cevaplanan" adet={cevaplananlar.length} />
-        <Liste belgeler={cevaplananlar} aktifId={docId} bosluk="Henüz cevap yazısı üretilmedi." />
+        <GroupHeader color="bg-cizgi-5" label="Cevaplanan" count={answered.length} />
+        <DocumentList
+          documents={answered}
+          activeId={docId}
+          emptyText="Henüz cevap yazısı üretilmedi."
+        />
       </div>
 
       <div className="flex items-center gap-[9px] border-t border-cizgi px-4 py-3">
         <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-avatar text-[11px] font-semibold text-ikincil">
-          {KULLANICI.bas}
+          {USER.initials}
         </span>
         <div className="min-w-0">
-          <div className="truncate text-xs font-semibold">{KULLANICI.ad}</div>
-          <div className="text-[10.5px] text-silik">{KULLANICI.daire}</div>
+          <div className="truncate text-xs font-semibold">{USER.name}</div>
+          <div className="text-[10.5px] text-silik">{USER.office}</div>
         </div>
       </div>
 
@@ -86,54 +94,54 @@ export function Sidebar() {
   );
 }
 
-function GrupBasligi({
-  renk,
-  etiket,
-  adet,
-  ilk = false,
+function GroupHeader({
+  color,
+  label,
+  count,
+  first = false,
 }: {
-  renk: string;
-  etiket: string;
-  adet: number;
-  ilk?: boolean;
+  color: string;
+  label: string;
+  count: number;
+  first?: boolean;
 }) {
   return (
-    <div className={`flex items-center gap-[7px] px-2 pb-1.5 ${ilk ? "pt-3" : "pt-[18px]"}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${renk}`} />
+    <div className={`flex items-center gap-[7px] px-2 pb-1.5 ${first ? "pt-3" : "pt-[18px]"}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
       <span className="text-[10.5px] font-semibold tracking-[.09em] text-silik uppercase">
-        {etiket}
+        {label}
       </span>
-      <span className="ml-auto text-[11px] font-semibold text-silik">{adet}</span>
+      <span className="ml-auto text-[11px] font-semibold text-silik">{count}</span>
     </div>
   );
 }
 
-function Liste({
-  belgeler,
-  aktifId,
-  bosluk,
+function DocumentList({
+  documents,
+  activeId,
+  emptyText,
 }: {
-  belgeler: DocumentSummary[];
-  aktifId?: string;
-  bosluk: string;
+  documents: DocumentSummary[];
+  activeId?: string;
+  emptyText: string;
 }) {
-  if (!belgeler.length) {
-    return <p className="px-2.5 py-1 text-[11px] leading-relaxed text-soluk">{bosluk}</p>;
+  if (!documents.length) {
+    return <p className="px-2.5 py-1 text-[11px] leading-relaxed text-soluk">{emptyText}</p>;
   }
   return (
     <div className="flex flex-col gap-0.5">
-      {belgeler.map((d) => {
-        const aktif = d.id === aktifId;
+      {documents.map((d) => {
+        const active = d.id === activeId;
         return (
           <Link
             key={d.id}
-            to={`/evrak/${d.id}`}
+            to={`/documents/${d.id}`}
             className={`block rounded-[9px] px-2.5 py-[9px] transition-colors ${
-              aktif ? "bg-yuzey-2 shadow-[inset_2px_0_0_var(--color-gib)]" : "hover:bg-yuzey-2"
+              active ? "bg-yuzey-2 shadow-[inset_2px_0_0_var(--color-gib)]" : "hover:bg-yuzey-2"
             }`}
           >
             <span className="block truncate text-[13px] leading-[1.35] font-medium">
-              {evrakBasligi(d)}
+              {documentTitle(d)}
             </span>
             <span className="mt-[3px] block truncate text-[11px] text-silik">
               {d.routing.servis ?? "yönlendirilemedi"}

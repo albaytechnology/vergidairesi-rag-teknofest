@@ -1,27 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client.ts";
 import { streamChat } from "../api/sse.ts";
-import { useEvrak } from "../shell/EvrakLayout.tsx";
+import { useDocumentContext } from "../shell/DocumentLayout.tsx";
 
-interface Mesaj {
+interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: string[];
 }
 
 /** Sohbete aticlanmis ek belge. */
-interface Ek {
-  ad: string;
+interface Attachment {
+  name: string;
   path: string;
-  durum: "yukleniyor" | "isleniyor" | "hazir" | "hata";
-  mesaj?: string;
+  status: "uploading" | "processing" | "ready" | "error";
+  message?: string;
 }
 
-const KABUL_EDILEN = ".pdf,.docx,.xlsx,.pptx,.txt,.md,.html";
-const YOKLAMA_MS = 2000;
-const YOKLAMA_SINIRI = 90; // ~3 dk: parse + chunk + analiz + embed
+const ACCEPTED_TYPES = ".pdf,.docx,.xlsx,.pptx,.txt,.md,.html";
+const POLL_MS = 2000;
+const POLL_LIMIT = 90; // ~3 dk: parse + chunk + analiz + embed
 
-const HIZLI_SORULAR = [
+const QUICK_PROMPTS = [
   "Özet çıkar",
   "Yönlendirme neden bu servis?",
   "Onaylayacak şekilde cevap yazısı yaz",
@@ -39,37 +39,37 @@ const HIZLI_SORULAR = [
  * resmi evrak sayilmaz, servis havuzlarina ve arsive dusmez.
  */
 export function ChatView() {
-  const { doc, chat, sessionId } = useEvrak();
-  const [mesajlar, setMesajlar] = useState<Mesaj[]>(() =>
+  const { doc, chat, sessionId } = useDocumentContext();
+  const [messages, setMessages] = useState<Message[]>(() =>
     chat.map((m) => ({ role: m.role, content: m.content, sources: m.sources })),
   );
-  const [girdi, setGirdi] = useState("");
-  const [akan, setAkan] = useState<string | null>(null);
-  const [izler, setIzler] = useState<string[]>([]);
-  const [hata, setHata] = useState<string | null>(null);
-  const [ekler, setEkler] = useState<Ek[]>([]);
-  const iptalRef = useRef<AbortController | null>(null);
-  const sonRef = useRef<HTMLDivElement>(null);
-  const dosyaRef = useRef<HTMLInputElement>(null);
-  const yaziRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState<string | null>(null);
+  const [traces, setTraces] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    sonRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [mesajlar, akan, izler]);
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, streaming, traces]);
 
   // Ekrandan ayrilirken akisi kes — sunucu istemci koptugunda uretimi durduruyor.
-  useEffect(() => () => iptalRef.current?.abort(), []);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   // Composer tek satirda baslar, iceriğe gore 120px'e kadar buyur.
   useEffect(() => {
-    const el = yaziRef.current;
+    const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, [girdi]);
+  }, [input]);
 
-  const ekDurumuGuncelle = (path: string, yama: Partial<Ek>) =>
-    setEkler((mevcut) => mevcut.map((e) => (e.path === path ? { ...e, ...yama } : e)));
+  const updateAttachment = (path: string, patch: Partial<Attachment>) =>
+    setAttachments((current) => current.map((a) => (a.path === path ? { ...a, ...patch } : a)));
 
   /**
    * Dosyayi oturuma yukler ve ARANABILIR olana kadar yoklar.
@@ -82,81 +82,87 @@ export function ChatView() {
    * indekslenmemis belgeye soru sorup "bu bilgi belgede bulunamadi" cevabi
    * almasina yol aciyordu.
    */
-  async function ekle(file: File) {
-    setHata(null);
-    const gecici: Ek = { ad: file.name, path: `bekliyor:${file.name}`, durum: "yukleniyor" };
-    setEkler((m) => [...m, gecici]);
+  async function attach(file: File) {
+    setError(null);
+    const pending: Attachment = {
+      name: file.name,
+      path: `bekliyor:${file.name}`,
+      status: "uploading",
+    };
+    setAttachments((a) => [...a, pending]);
     try {
-      const sonuc = await api.sessionUpload(sessionId, file);
-      setEkler((m) =>
-        m.map((e) => (e.path === gecici.path ? { ...e, path: sonuc.path, durum: "isleniyor" } : e)),
+      const result = await api.sessionUpload(sessionId, file);
+      setAttachments((current) =>
+        current.map((a) =>
+          a.path === pending.path ? { ...a, path: result.path, status: "processing" } : a,
+        ),
       );
-      for (let i = 0; i < YOKLAMA_SINIRI; i++) {
-        await bekle(YOKLAMA_MS);
-        const durum = await api.uploadStatus([sonuc.path]).catch(() => null);
-        const asama = durum?.durumlar[0]?.asama;
-        if (asama === "hazir") {
-          ekDurumuGuncelle(sonuc.path, { durum: "hazir" });
+      for (let i = 0; i < POLL_LIMIT; i++) {
+        await wait(POLL_MS);
+        const status = await api.uploadStatus([result.path]).catch(() => null);
+        const stage = status?.durumlar[0]?.asama;
+        if (stage === "hazir") {
+          updateAttachment(result.path, { status: "ready" });
           return;
         }
-        if (asama === "hata") {
-          ekDurumuGuncelle(sonuc.path, { durum: "hata", mesaj: "belge işlenemedi" });
+        if (stage === "hata") {
+          updateAttachment(result.path, { status: "error", message: "belge işlenemedi" });
           return;
         }
       }
-      ekDurumuGuncelle(sonuc.path, { durum: "hata", mesaj: "işlenmesi çok uzun sürdü" });
+      updateAttachment(result.path, { status: "error", message: "işlenmesi çok uzun sürdü" });
     } catch (err) {
-      setEkler((m) =>
-        m.map((e) =>
-          e.path === gecici.path
-            ? { ...e, durum: "hata", mesaj: err instanceof Error ? err.message : "yüklenemedi" }
-            : e,
+      setAttachments((current) =>
+        current.map((a) =>
+          a.path === pending.path
+            ? { ...a, status: "error", message: err instanceof Error ? err.message : "yüklenemedi" }
+            : a,
         ),
       );
     }
   }
 
-  async function gonder(metin?: string) {
-    const soru = (metin ?? girdi).trim();
-    if (!soru || akan !== null) return;
+  async function send(text?: string) {
+    const question = (text ?? input).trim();
+    if (!question || streaming !== null) return;
 
-    setGirdi("");
-    setHata(null);
-    setIzler([]);
-    setMesajlar((m) => [...m, { role: "user", content: soru }]);
-    setAkan("");
+    setInput("");
+    setError(null);
+    setTraces([]);
+    setMessages((m) => [...m, { role: "user", content: question }]);
+    setStreaming("");
 
-    const kontrol = new AbortController();
-    iptalRef.current = kontrol;
-    let biriken = "";
-    let kaynaklar: string[] = [];
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let answer = "";
+    let sources: string[] = [];
 
     try {
       for await (const ev of streamChat({
-        question: soru,
+        question,
         documentId: doc.id,
         // Yalnizca hazir ek varsa gonder; aksi halde sunucu bos bir kapsam arar.
-        sessionId: ekler.some((e) => e.durum === "hazir") ? sessionId : undefined,
-        signal: kontrol.signal,
+        sessionId: attachments.some((a) => a.status === "ready") ? sessionId : undefined,
+        signal: controller.signal,
       })) {
-        if (ev.type === "trace") setIzler((i) => [...i, ev.message]);
-        else if (ev.type === "sources") kaynaklar = ev.sources;
+        if (ev.type === "trace") setTraces((t) => [...t, ev.message]);
+        else if (ev.type === "sources") sources = ev.sources;
         else if (ev.type === "token") {
-          biriken += ev.text;
-          setAkan(biriken);
-        } else if (ev.type === "done") biriken = ev.answer;
-        else if (ev.type === "error") setHata(ev.message);
+          answer += ev.text;
+          setStreaming(answer);
+        } else if (ev.type === "done") answer = ev.answer;
+        else if (ev.type === "error") setError(ev.message);
       }
-      if (biriken) {
-        setMesajlar((m) => [...m, { role: "assistant", content: biriken, sources: kaynaklar }]);
+      if (answer) {
+        setMessages((m) => [...m, { role: "assistant", content: answer, sources }]);
       }
     } catch (err) {
-      if (!kontrol.signal.aborted) {
-        setHata(err instanceof Error ? err.message : "Akış kesildi");
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : "Akış kesildi");
       }
     } finally {
-      setAkan(null);
-      iptalRef.current = null;
+      setStreaming(null);
+      abortRef.current = null;
     }
   }
 
@@ -165,20 +171,20 @@ export function ChatView() {
       <div className="flex-1 overflow-y-auto px-7 pt-[26px] pb-2">
         <div className="mx-auto flex max-w-[760px] flex-col gap-[18px]">
           <div className="flex flex-wrap justify-center gap-2 pb-1.5">
-            {HIZLI_SORULAR.map((s) => (
+            {QUICK_PROMPTS.map((p) => (
               <button
-                key={s}
+                key={p}
                 type="button"
-                disabled={akan !== null}
-                onClick={() => void gonder(s)}
+                disabled={streaming !== null}
+                onClick={() => void send(p)}
                 className="rounded-full border border-cizgi-2 bg-white px-3 py-[7px] text-xs font-medium text-govde transition-colors hover:border-gib hover:text-gib disabled:opacity-50"
               >
-                {s}
+                {p}
               </button>
             ))}
           </div>
 
-          {mesajlar.length === 0 && akan === null && (
+          {messages.length === 0 && streaming === null && (
             <p className="pt-2 text-center text-[12.5px] leading-relaxed text-silik">
               Bu evrak hakkında soru sorun — cevaplar yalnızca belgenin içeriğine dayanır.
               <br />
@@ -186,39 +192,39 @@ export function ChatView() {
             </p>
           )}
 
-          {mesajlar.map((m, i) => (
-            <Balon key={i} mesaj={m} />
+          {messages.map((m, i) => (
+            <Bubble key={i} message={m} />
           ))}
 
-          {izler.length > 0 && akan !== null && (
+          {traces.length > 0 && streaming !== null && (
             <div className="space-y-0.5 text-[11px] text-soluk">
-              {izler.map((iz, i) => (
-                <div key={i}>· {iz}</div>
+              {traces.map((t, i) => (
+                <div key={i}>· {t}</div>
               ))}
             </div>
           )}
 
-          {akan !== null && (
-            <Balon mesaj={{ role: "assistant", content: akan || "yazıyor…" }} akiyor />
+          {streaming !== null && (
+            <Bubble message={{ role: "assistant", content: streaming || "yazıyor…" }} streaming />
           )}
 
-          {hata && (
+          {error && (
             <div className="rounded-lg border border-uyari-cizgi bg-uyari-zemin px-3 py-2 text-[11.5px] text-uyari">
-              {hata}
+              {error}
             </div>
           )}
-          <div ref={sonRef} />
+          <div ref={endRef} />
         </div>
       </div>
 
       <div className="px-7 pt-3 pb-[22px]">
-        {ekler.length > 0 && (
+        {attachments.length > 0 && (
           <div className="mx-auto mb-2 flex max-w-[760px] flex-wrap gap-1.5">
-            {ekler.map((e) => (
-              <EkChip
-                key={e.path}
-                ek={e}
-                onKaldir={() => setEkler((m) => m.filter((x) => x.path !== e.path))}
+            {attachments.map((a) => (
+              <AttachmentChip
+                key={a.path}
+                attachment={a}
+                onRemove={() => setAttachments((m) => m.filter((x) => x.path !== a.path))}
               />
             ))}
           </div>
@@ -226,13 +232,13 @@ export function ChatView() {
 
         <div className="mx-auto flex max-w-[760px] items-end gap-2.5 rounded-[14px] border border-cizgi-2 bg-white py-2.5 pr-2.5 pl-3 shadow-composer">
           <input
-            ref={dosyaRef}
+            ref={fileRef}
             type="file"
-            accept={KABUL_EDILEN}
+            accept={ACCEPTED_TYPES}
             className="hidden"
             onChange={(ev) => {
               const f = ev.target.files?.[0];
-              if (f) void ekle(f);
+              if (f) void attach(f);
               ev.target.value = "";
             }}
           />
@@ -240,29 +246,29 @@ export function ChatView() {
             type="button"
             title="Referans belge ekle"
             aria-label="Referans belge ekle"
-            onClick={() => dosyaRef.current?.click()}
+            onClick={() => fileRef.current?.click()}
             className="flex h-[34px] w-[34px] flex-[0_0_34px] items-center justify-center rounded-[9px] border border-cizgi bg-panel text-ikincil transition-colors hover:border-cizgi-5"
           >
-            <AtacIkonu />
+            <PaperclipIcon />
           </button>
           <textarea
-            ref={yaziRef}
+            ref={textareaRef}
             rows={1}
-            value={girdi}
-            onChange={(e) => setGirdi(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                void gonder();
+                void send();
               }
             }}
             placeholder="Belgeye dair bir şey sorun… (Enter ile gönder)"
             className="max-h-[120px] min-w-0 flex-1 resize-none border-none bg-transparent py-2 text-[13.5px] leading-[1.5] outline-none"
           />
-          {akan !== null ? (
+          {streaming !== null ? (
             <button
               type="button"
-              onClick={() => iptalRef.current?.abort()}
+              onClick={() => abortRef.current?.abort()}
               className="rounded-[9px] border border-cizgi-2 bg-white px-4 py-2 text-[13px] font-semibold text-govde transition-colors hover:border-cizgi-5"
             >
               Durdur
@@ -270,10 +276,10 @@ export function ChatView() {
           ) : (
             <button
               type="button"
-              onClick={() => void gonder()}
-              disabled={!girdi.trim()}
+              onClick={() => void send()}
+              disabled={!input.trim()}
               className={`rounded-[9px] px-4 py-[9px] text-[13px] font-semibold text-white transition-colors ${
-                girdi.trim() ? "bg-gib hover:bg-gib-koyu" : "bg-gib-solgun"
+                input.trim() ? "bg-gib hover:bg-gib-koyu" : "bg-gib-solgun"
               }`}
             >
               Gönder
@@ -288,29 +294,35 @@ export function ChatView() {
   );
 }
 
-function EkChip({ ek, onKaldir }: { ek: Ek; onKaldir: () => void }) {
-  const suruyor = ek.durum === "yukleniyor" || ek.durum === "isleniyor";
-  const renk =
-    ek.durum === "hazir"
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: Attachment;
+  onRemove: () => void;
+}) {
+  const busy = attachment.status === "uploading" || attachment.status === "processing";
+  const tone =
+    attachment.status === "ready"
       ? "border-onay/25 bg-onay-zemin text-onay"
-      : ek.durum === "hata"
+      : attachment.status === "error"
         ? "border-uyari-cizgi bg-uyari-zemin text-uyari"
         : "border-cizgi bg-panel text-ikincil";
   return (
-    <span className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] ${renk}`}>
-      {suruyor && (
+    <span className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] ${tone}`}>
+      {busy && (
         <span className="h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent" />
       )}
-      <span className="max-w-[220px] truncate">{ek.ad}</span>
+      <span className="max-w-[220px] truncate">{attachment.name}</span>
       <span className="opacity-70">
-        {ek.durum === "yukleniyor" && "yükleniyor"}
-        {ek.durum === "isleniyor" && "işleniyor"}
-        {ek.durum === "hazir" && "hazır"}
-        {ek.durum === "hata" && (ek.mesaj ?? "hata")}
+        {attachment.status === "uploading" && "yükleniyor"}
+        {attachment.status === "processing" && "işleniyor"}
+        {attachment.status === "ready" && "hazır"}
+        {attachment.status === "error" && (attachment.message ?? "hata")}
       </span>
       <button
         type="button"
-        onClick={onKaldir}
+        onClick={onRemove}
         aria-label="Eki kaldır"
         className="ml-0.5 opacity-60 hover:opacity-100"
       >
@@ -320,7 +332,7 @@ function EkChip({ ek, onKaldir }: { ek: Ek; onKaldir: () => void }) {
   );
 }
 
-function AtacIkonu() {
+function PaperclipIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
@@ -335,41 +347,41 @@ function AtacIkonu() {
  * dangerouslySetInnerHTML'den kacinmak istiyoruz. Yalnizca ** ** ayristirilir,
  * geri kalan her sey React tarafindan metin olarak basilir — enjeksiyon yok.
  */
-function Metin({ ham }: { ham: string }) {
-  const parcalar = ham.split(/\*\*(.+?)\*\*/gs);
-  return <>{parcalar.map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p))}</>;
+function RichText({ raw }: { raw: string }) {
+  const parts = raw.split(/\*\*(.+?)\*\*/gs);
+  return <>{parts.map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p))}</>;
 }
 
-function Balon({ mesaj, akiyor = false }: { mesaj: Mesaj; akiyor?: boolean }) {
-  const kullanici = mesaj.role === "user";
+function Bubble({ message, streaming = false }: { message: Message; streaming?: boolean }) {
+  const isUser = message.role === "user";
   return (
-    <div className={kullanici ? "flex justify-end" : "flex justify-start"}>
+    <div className={isUser ? "flex justify-end" : "flex justify-start"}>
       <div
         className={
-          kullanici
+          isUser
             ? "max-w-[76%] rounded-[14px_14px_4px_14px] bg-metin px-4 py-3 text-white"
             : "max-w-[88%] rounded-[14px_14px_14px_4px] border border-cizgi bg-white px-4 py-3.5 text-metin-2 shadow-balon"
         }
       >
         <div
           className={`text-[13.5px] leading-[1.6] whitespace-pre-wrap text-pretty ${
-            akiyor ? "animate-pulse" : ""
+            streaming ? "animate-pulse" : ""
           }`}
         >
-          <Metin ham={mesaj.content} />
+          <RichText raw={message.content} />
         </div>
-        {mesaj.sources && mesaj.sources.length > 0 && (
+        {message.sources && message.sources.length > 0 && (
           <div className="mt-3 border-t border-cizgi-3 pt-2.5">
             <div className="mb-1.5 text-[10.5px] font-semibold tracking-[.08em] text-soluk uppercase">
               Kaynaklar
             </div>
             <div className="flex flex-col gap-1.5">
-              {mesaj.sources.map((k) => (
+              {message.sources.map((s) => (
                 <span
-                  key={k}
+                  key={s}
                   className="rounded-[7px] border border-cizgi-3 bg-zemin px-[9px] py-1.5 text-[11.5px] text-ikincil"
                 >
-                  {k}
+                  {s}
                 </span>
               ))}
             </div>
@@ -380,4 +392,4 @@ function Balon({ mesaj, akiyor = false }: { mesaj: Mesaj; akiyor?: boolean }) {
   );
 }
 
-const bekle = (ms: number) => new Promise((c) => setTimeout(c, ms));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

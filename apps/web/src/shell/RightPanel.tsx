@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
-import { EtiketBasligi, MaddeChip, UyariKutusu } from "../components/ui.tsx";
+import { ArticleChip, SectionLabel, WarningBox } from "../components/ui.tsx";
 import type { DocumentSummary } from "../api/types.ts";
 
 /**
@@ -13,10 +13,10 @@ import type { DocumentSummary } from "../api/types.ts";
  */
 export function RightPanel({
   doc,
-  kapat,
+  onClose,
 }: {
   doc: DocumentSummary & { path: string };
-  kapat: () => void;
+  onClose: () => void;
 }) {
   return (
     <aside className="w-[340px] flex-[0_0_340px] overflow-y-auto border-l border-cizgi bg-white px-5 pt-[22px] pb-10">
@@ -24,7 +24,7 @@ export function RightPanel({
         <div className="text-[12.5px] font-bold tracking-[-.01em]">Belge detayı</div>
         <button
           type="button"
-          onClick={kapat}
+          onClick={onClose}
           aria-label="Paneli kapat"
           className="h-[26px] w-[26px] rounded-[7px] border border-cizgi bg-panel text-[13px] leading-none text-ikincil transition-colors hover:border-cizgi-5"
         >
@@ -32,7 +32,7 @@ export function RightPanel({
         </button>
       </div>
 
-      <EtiketBasligi>Özet</EtiketBasligi>
+      <SectionLabel>Özet</SectionLabel>
       <p className="mt-2 mb-3 text-[12.5px] leading-[1.65] text-pretty text-govde">
         {doc.ozet ?? "Bu evrak için özet üretilmemiş."}
       </p>
@@ -45,10 +45,10 @@ export function RightPanel({
         <span className="truncate text-[11px] text-silik">{doc.filename}</span>
       </div>
 
-      <Bilgiler entities={doc.entities} />
-      <Yonlendirme doc={doc} />
+      <ExtractedInfo entities={doc.entities} />
+      <RoutingCard doc={doc} />
 
-      <EtiketBasligi>Kaynak belge</EtiketBasligi>
+      <SectionLabel>Kaynak belge</SectionLabel>
       <div className="mt-2.5 overflow-hidden rounded-xl border border-cizgi bg-yuzey">
         <iframe
           title="Kaynak belge önizleme"
@@ -71,49 +71,49 @@ export function RightPanel({
   );
 }
 
-function Bilgiler({ entities }: { entities: DocumentSummary["entities"] }) {
-  const satirlar: [string, string][] = [
-    ["Kişi", birlestir(entities?.kisiKurumlar)],
-    ["Tutar", birlestir(entities?.tutarlar)],
-    ["Tarih", birlestir(entities?.tarihler)],
-    ["Dönem", birlestir(entities?.donemler)],
+function ExtractedInfo({ entities }: { entities: DocumentSummary["entities"] }) {
+  const rows: [string, string][] = [
+    ["Kişi", joinValues(entities?.kisiKurumlar)],
+    ["Tutar", joinValues(entities?.tutarlar)],
+    ["Tarih", joinValues(entities?.tarihler)],
+    ["Dönem", joinValues(entities?.donemler)],
   ];
-  const kimlik = entities?.vkn ?? entities?.tckn ?? null;
+  const taxId = entities?.vkn ?? entities?.tckn ?? null;
 
   return (
     <>
-      <EtiketBasligi>Çıkarılan bilgiler</EtiketBasligi>
+      <SectionLabel>Çıkarılan bilgiler</SectionLabel>
       <div className="mt-2.5 mb-2 grid grid-cols-[82px_1fr] gap-x-3 gap-y-2 text-[12.5px]">
-        {kimlik && (
+        {taxId && (
           <>
             <span className="text-silik">{entities?.vkn ? "VKN" : "TCKN"}</span>
-            <span className="font-mono text-[11.5px] text-metin-2">{kimlik}</span>
+            <span className="font-mono text-[11.5px] text-metin-2">{taxId}</span>
           </>
         )}
-        {satirlar.map(([ad, deger]) => (
-          <div key={ad} className="contents">
-            <span className="text-silik">{ad}</span>
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <span className="text-silik">{label}</span>
             <span
-              className={`text-metin-2 ${ad === "Tutar" ? "font-mono text-[11.5px]" : ""}`}
+              className={`text-metin-2 ${label === "Tutar" ? "font-mono text-[11.5px]" : ""}`}
             >
-              {deger}
+              {value}
             </span>
           </div>
         ))}
       </div>
       <div className="mb-6">
         {/* Bos birakilmasi bilincli: checksum'dan gecmeyen numara yazilmiyor. */}
-        {!kimlik && (
-          <UyariKutusu>
+        {!taxId && (
+          <WarningBox>
             Doğrulanmış VKN/TCKN bulunamadı — checksum’dan geçmeyen numara yazılmaz.
-          </UyariKutusu>
+          </WarningBox>
         )}
       </div>
     </>
   );
 }
 
-const birlestir = (v: string[] | undefined): string => (v?.length ? v.join(" · ") : "—");
+const joinValues = (v: string[] | undefined): string => (v?.length ? v.join(" · ") : "—");
 
 /**
  * Yonlendirme karti.
@@ -121,29 +121,29 @@ const birlestir = (v: string[] | undefined): string => (v?.length ? v.join(" · 
  * "Elle ata" ve "Yeniden hesapla" bilerek yan yana: son sozu insan soyler ama
  * modelin kararini tazelemek de tek tikla mumkun olmali (bkz. /reroute).
  */
-function Yonlendirme({ doc }: { doc: DocumentSummary }) {
+function RoutingCard({ doc }: { doc: DocumentSummary }) {
   const qc = useQueryClient();
-  const [acik, setAcik] = useState(false);
-  const [servis, setServis] = useState(doc.routing.servis ?? "");
+  const [open, setOpen] = useState(false);
+  const [service, setService] = useState(doc.routing.servis ?? "");
 
-  const { data: servisler } = useQuery({
+  const { data: catalog } = useQuery({
     queryKey: ["services"],
     queryFn: api.services,
-    enabled: acik,
+    enabled: open,
   });
 
-  const yenidenYonlendir = useMutation({
-    mutationFn: (hedef?: string) => api.reroute(doc.id, hedef),
+  const reroute = useMutation({
+    mutationFn: (target?: string) => api.reroute(doc.id, target),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["document", doc.id] });
       void qc.invalidateQueries({ queryKey: ["archive"] });
-      setAcik(false);
+      setOpen(false);
     },
   });
 
   return (
     <>
-      <EtiketBasligi>Yönlendirme</EtiketBasligi>
+      <SectionLabel>Yönlendirme</SectionLabel>
       <div className="mt-2.5 mb-6 rounded-xl border border-cizgi bg-panel p-3.5">
         <div className="text-[13px] leading-[1.4] font-semibold">
           {doc.routing.servis ?? "Belirlenemedi — manuel inceleme gerekli"}
@@ -159,32 +159,29 @@ function Yonlendirme({ doc }: { doc: DocumentSummary }) {
         {doc.routing.maddeler.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {doc.routing.maddeler.map((m) => (
-              <MaddeChip key={m.maddeNo} ton="cerceve">
+              <ArticleChip key={m.maddeNo} tone="outline">
                 <span title={m.baslik}>M.{m.maddeNo}</span>
-              </MaddeChip>
+              </ArticleChip>
             ))}
           </div>
         )}
 
         <div className="flex gap-2">
-          <KucukDugme onClick={() => setAcik((a) => !a)}>Elle ata</KucukDugme>
-          <KucukDugme
-            disabled={yenidenYonlendir.isPending}
-            onClick={() => yenidenYonlendir.mutate(undefined)}
-          >
-            {yenidenYonlendir.isPending ? "Hesaplanıyor…" : "Yeniden hesapla"}
-          </KucukDugme>
+          <SmallButton onClick={() => setOpen((o) => !o)}>Elle ata</SmallButton>
+          <SmallButton disabled={reroute.isPending} onClick={() => reroute.mutate(undefined)}>
+            {reroute.isPending ? "Hesaplanıyor…" : "Yeniden hesapla"}
+          </SmallButton>
         </div>
 
-        {acik && (
+        {open && (
           <div className="mt-2 flex gap-2">
             <select
-              value={servis}
-              onChange={(e) => setServis(e.target.value)}
+              value={service}
+              onChange={(e) => setService(e.target.value)}
               className="min-w-0 flex-1 rounded-lg border border-cizgi-2 bg-white px-2 py-1.5 text-[11.5px] outline-none"
             >
               <option value="">Servis seçin…</option>
-              {servisler?.services.map((s) => (
+              {catalog?.services.map((s) => (
                 <option key={s.servis} value={s.servis}>
                   {s.servis}
                 </option>
@@ -192,25 +189,23 @@ function Yonlendirme({ doc }: { doc: DocumentSummary }) {
             </select>
             <button
               type="button"
-              disabled={!servis || yenidenYonlendir.isPending}
-              onClick={() => yenidenYonlendir.mutate(servis)}
+              disabled={!service || reroute.isPending}
+              onClick={() => reroute.mutate(service)}
               className="rounded-lg bg-gib px-2.5 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-50"
             >
               Ata
             </button>
           </div>
         )}
-        {yenidenYonlendir.error && (
-          <p className="mt-2 text-[11px] text-uyari">
-            {(yenidenYonlendir.error as Error).message}
-          </p>
+        {reroute.error && (
+          <p className="mt-2 text-[11px] text-uyari">{(reroute.error as Error).message}</p>
         )}
       </div>
     </>
   );
 }
 
-function KucukDugme({
+function SmallButton({
   onClick,
   disabled = false,
   children,

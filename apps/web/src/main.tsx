@@ -17,10 +17,10 @@ const queryClient = new QueryClient({
   },
 });
 
-const kok = document.getElementById("root");
-if (!kok) throw new Error("#root bulunamadi");
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("#root bulunamadi");
 
-createRoot(kok).render(
+createRoot(rootEl).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

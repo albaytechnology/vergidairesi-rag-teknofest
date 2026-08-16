@@ -550,13 +550,21 @@ dayanakları. Çalışan bir evrakla uğraşırken sekme değiştirmiyor.
 | Route | İçerik |
 |---|---|
 | `/` | Ana ekran — evrak bırakma alanı + henüz açılmamış evrak önerileri |
-| `/evrak/:docId` | Belge sohbeti (SSE akışı, ataçla referans belge ekleme) |
-| `/evrak/:docId/cevap-yazisi` | Cevap yazısı: solda karar formu, sağda düzenlenebilir önizleme |
-| `/servisler` | Servis dağılımı — yönetmelik hiyerarşisine göre gruplanmış havuzlar |
-| `/servisler/:servisAdi` | Tek servisin havuzu; `belirlenemedi` manuel inceleme havuzudur |
+| `/documents/:docId` | Belge sohbeti (SSE akışı, ataçla referans belge ekleme) |
+| `/documents/:docId/reply` | Cevap yazısı: solda karar formu, sağda düzenlenebilir önizleme |
+| `/services` | Servis dağılımı — yönetmelik hiyerarşisine göre gruplanmış havuzlar |
+| `/services/:serviceName` | Tek servisin havuzu; `belirlenemedi` manuel inceleme havuzudur |
 
-Eski yollar (`/document/:docId`, `/arsiv`, `/evrak-ekle`, `/queue/:servis`)
-karşılıklarına yönlendirilir — dışarıya verilmiş bağlantılar kırılmasın.
+**Kod İngilizce, ekran Türkçe.** Yol adları, bileşen/fonksiyon/değişken adları
+İngilizcedir; kullanıcıya görünen her metin ve sunucu sözleşmesindeki alan
+adları (`konu`, `routing.servis`, `yasamDongusu`, `durum=pending`…) Türkçe
+kalır. İkisini karıştırmamak önemli: alan adını çevirmek API'yi bozar, arayüz
+metnini çevirmek memurun ekranını bozar.
+
+Türkçe adlı eski yollar (`/evrak/:docId`, `/evrak/:docId/cevap-yazisi`,
+`/servisler`, `/servisler/:servisAdi`, `/document/:docId`, `/arsiv`,
+`/evrak-ekle`, `/queue/:servis`) karşılıklarına yönlendirilir — dışarıya
+verilmiş bağlantılar kırılmasın.
 
 **Servisler ayrı bir sayfa değil, ikinci görünüm.** Header'ın solundaki
 `Asistan · Servisler` segmented navigasyonu yalnızca orta alanı değiştirir; sol

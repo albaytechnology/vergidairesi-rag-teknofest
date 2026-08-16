@@ -1,20 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, indir } from "../api/client.ts";
-import { EtiketBasligi, UyariKutusu } from "../components/ui.tsx";
-import { useEvrak } from "../shell/EvrakLayout.tsx";
+import { api, download } from "../api/client.ts";
+import { SectionLabel, WarningBox } from "../components/ui.tsx";
+import { useDocumentContext } from "../shell/DocumentLayout.tsx";
 import type { LetterDecision, LetterModel } from "../api/types.ts";
 
-const KARARLAR: { deger: LetterDecision; etiket: string; olumsuz: boolean }[] = [
-  { deger: "onay", etiket: "Onay", olumsuz: false },
-  { deger: "kismi_onay", etiket: "Kısmi onay", olumsuz: true },
-  { deger: "red", etiket: "Red", olumsuz: true },
-  { deger: "eksik_belge", etiket: "Eksik belge", olumsuz: true },
-  { deger: "bilgilendirme", etiket: "Bilgilendirme", olumsuz: false },
+const DECISIONS: { value: LetterDecision; label: string; negative: boolean }[] = [
+  { value: "onay", label: "Onay", negative: false },
+  { value: "kismi_onay", label: "Kısmi onay", negative: true },
+  { value: "red", label: "Red", negative: true },
+  { value: "eksik_belge", label: "Eksik belge", negative: true },
+  { value: "bilgilendirme", label: "Bilgilendirme", negative: false },
 ];
 
 /** Sablonda serbest duzenlemeye acilan bloklar — antet/imza/sayi korunur. */
-const DUZENLENEBILIR = [".konu", ".ilgi-liste", ".metin"];
+const EDITABLE_BLOCKS = [".konu", ".ilgi-liste", ".metin"];
 
 /**
  * Cevap yazisi ekrani.
@@ -25,47 +25,47 @@ const DUZENLENEBILIR = [".konu", ".ilgi-liste", ".metin"];
  * bu cercevenin disini olusturur.
  */
 export function ReplyView() {
-  const { doc } = useEvrak();
+  const { doc } = useDocumentContext();
   const docId = doc.id;
-  const [karar, setKarar] = useState<LetterDecision>("onay");
-  const [gerekce, setGerekce] = useState("");
-  const [muhatapAd, setMuhatapAd] = useState(doc.entities?.kisiKurumlar[0] ?? "");
-  const [muhatapTur, setMuhatapTur] = useState<"kisi" | "kurum">("kisi");
+  const [decision, setDecision] = useState<LetterDecision>("onay");
+  const [reason, setReason] = useState("");
+  const [recipientName, setRecipientName] = useState(doc.entities?.kisiKurumlar[0] ?? "");
+  const [recipientType, setRecipientType] = useState<"kisi" | "kurum">("kisi");
   const [model, setModel] = useState<LetterModel | null>(null);
   const [html, setHtml] = useState<string | null>(null);
-  const [uyarilar, setUyarilar] = useState<string[]>([]);
-  const [indirmeHatasi, setIndirmeHatasi] = useState<string | null>(null);
-  const [kopyalandi, setKopyalandi] = useState(false);
-  const cerceveRef = useRef<HTMLIFrameElement>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const frameRef = useRef<HTMLIFrameElement>(null);
   const qc = useQueryClient();
 
-  const olumsuz = KARARLAR.find((k) => k.deger === karar)?.olumsuz ?? false;
-  const gerekceEksik = olumsuz && !gerekce.trim();
+  const isNegative = DECISIONS.find((d) => d.value === decision)?.negative ?? false;
+  const reasonMissing = isNegative && !reason.trim();
 
-  const { data: gecmis } = useQuery({
+  const { data: history } = useQuery({
     queryKey: ["letters", docId],
     queryFn: () => api.letters(docId),
   });
 
-  const uret = useMutation({
-    mutationFn: (kaydet: boolean) =>
+  const generate = useMutation({
+    mutationFn: (persist: boolean) =>
       api.draftLetter({
         docId,
-        karar,
-        gerekce: gerekce.trim() || undefined,
-        muhatap: { ad: muhatapAd.trim() || undefined, tur: muhatapTur },
-        kaydet,
+        karar: decision,
+        gerekce: reason.trim() || undefined,
+        muhatap: { ad: recipientName.trim() || undefined, tur: recipientType },
+        kaydet: persist,
       }),
-    onSuccess: (sonuc, kaydet) => {
-      setModel(sonuc.model);
-      setHtml(sonuc.html);
-      setUyarilar([
-        ...sonuc.dayanaksizSayilar.map(
+    onSuccess: (result, persist) => {
+      setModel(result.model);
+      setHtml(result.html);
+      setWarnings([
+        ...result.dayanaksizSayilar.map(
           (s) => `Evrakta karşılığı bulunamayan sayı: "${s}" — göndermeden önce doğrulayın.`,
         ),
-        ...sonuc.eksikAlanlar.map((a) => `Yapılandırılmamış alan: ${a}`),
+        ...result.eksikAlanlar.map((a) => `Yapılandırılmamış alan: ${a}`),
       ]);
-      if (kaydet) void qc.invalidateQueries({ queryKey: ["letters", docId] });
+      if (persist) void qc.invalidateQueries({ queryKey: ["letters", docId] });
     },
   });
 
@@ -79,101 +79,101 @@ export function ReplyView() {
    */
   useEffect(() => {
     if (!html) return;
-    let iptal = false;
-    const bitis = Date.now() + 5000;
-    const dene = () => {
-      if (iptal) return;
-      const belge = cerceveRef.current?.contentDocument;
-      if (belge?.querySelector(DUZENLENEBILIR[0]!)) {
-        duzenlemeyiAc(cerceveRef.current);
-        yuksekligiAyarla(cerceveRef.current);
-        belge.addEventListener("input", () => yuksekligiAyarla(cerceveRef.current));
-      } else if (Date.now() < bitis) requestAnimationFrame(dene);
+    let cancelled = false;
+    const deadline = Date.now() + 5000;
+    const attempt = () => {
+      if (cancelled) return;
+      const frameDoc = frameRef.current?.contentDocument;
+      if (frameDoc?.querySelector(EDITABLE_BLOCKS[0]!)) {
+        enableEditing(frameRef.current);
+        fitHeight(frameRef.current);
+        frameDoc.addEventListener("input", () => fitHeight(frameRef.current));
+      } else if (Date.now() < deadline) requestAnimationFrame(attempt);
     };
-    dene();
+    attempt();
     return () => {
-      iptal = true;
+      cancelled = true;
     };
   }, [html]);
 
   /** Onizlemedeki son hali oku — calisanin elle duzeltmesi ciktilara yansisin. */
-  function guncelHtml(): string {
-    return cerceveRef.current?.contentDocument?.documentElement.outerHTML ?? html ?? "";
+  function currentHtml(): string {
+    return frameRef.current?.contentDocument?.documentElement.outerHTML ?? html ?? "";
   }
 
-  async function indirDosya(bicim: "pdf" | "docx") {
-    setIndirmeHatasi(null);
+  async function downloadFile(format: "pdf" | "docx") {
+    setDownloadError(null);
     try {
-      const ad = `cevap-yazisi-${docId.slice(0, 8)}.${bicim}`;
-      const govde =
-        bicim === "pdf"
+      const filename = `cevap-yazisi-${docId.slice(0, 8)}.${format}`;
+      const payload =
+        format === "pdf"
           ? // docId gonderiliyor: PDF disari alinmasi evraki arsivde
             // "cevap yazildi" tarafina gecirir (is akisinin bitis isareti).
-            { html: guncelHtml(), docId, karar }
-          : { model: duzenlemeyiModeleYaz(model!, cerceveRef.current?.contentDocument ?? null) };
-      indir(await api.letterFile(bicim, govde, ad), ad);
-      if (bicim === "pdf") {
+            { html: currentHtml(), docId, karar: decision }
+          : { model: applyEditsToModel(model!, frameRef.current?.contentDocument ?? null) };
+      download(await api.letterFile(format, payload, filename), filename);
+      if (format === "pdf") {
         void qc.invalidateQueries({ queryKey: ["archive"] });
         void qc.invalidateQueries({ queryKey: ["document", docId] });
       }
     } catch (err) {
-      setIndirmeHatasi(err instanceof Error ? err.message : "İndirme başarısız");
+      setDownloadError(err instanceof Error ? err.message : "İndirme başarısız");
     }
   }
 
-  async function kopyala() {
-    const metin = cerceveRef.current?.contentDocument?.body.innerText ?? "";
-    await navigator.clipboard.writeText(metin).catch(() => undefined);
-    setKopyalandi(true);
-    setTimeout(() => setKopyalandi(false), 2000);
+  async function copy() {
+    const text = frameRef.current?.contentDocument?.body.innerText ?? "";
+    await navigator.clipboard.writeText(text).catch(() => undefined);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
     <div className="flex min-h-0 flex-1 overflow-x-auto">
       <div className="w-[340px] flex-[0_1_340px] overflow-y-auto border-r border-cizgi bg-white p-6 min-w-[288px]">
-        <EtiketBasligi>Karar</EtiketBasligi>
+        <SectionLabel>Karar</SectionLabel>
         <div className="mt-3 mb-[22px] flex flex-col gap-1.5">
-          {KARARLAR.map((k) => {
-            const secili = karar === k.deger;
+          {DECISIONS.map((d) => {
+            const selected = decision === d.value;
             return (
               <button
-                key={k.deger}
+                key={d.value}
                 type="button"
-                onClick={() => setKarar(k.deger)}
+                onClick={() => setDecision(d.value)}
                 className={`flex w-full items-center gap-2 rounded-[10px] border px-3 py-2.5 text-left transition-colors ${
-                  secili ? "border-gib bg-gib-sis" : "border-cizgi-2 bg-white hover:border-cizgi-5"
+                  selected ? "border-gib bg-gib-sis" : "border-cizgi-2 bg-white hover:border-cizgi-5"
                 }`}
               >
                 <span
                   className={`h-3.5 w-3.5 flex-[0_0_14px] rounded-full bg-white ${
-                    secili ? "border-4 border-gib" : "border-[1.5px] border-cizgi-5"
+                    selected ? "border-4 border-gib" : "border-[1.5px] border-cizgi-5"
                   }`}
                 />
-                <span className="text-[13px] font-medium">{k.etiket}</span>
+                <span className="text-[13px] font-medium">{d.label}</span>
               </button>
             );
           })}
         </div>
 
-        <EtiketBasligi>
-          Gerekçe {olumsuz && <span className="text-uyari normal-case">(zorunlu)</span>}
-        </EtiketBasligi>
+        <SectionLabel>
+          Gerekçe {isNegative && <span className="text-uyari normal-case">(zorunlu)</span>}
+        </SectionLabel>
         <textarea
           rows={4}
-          value={gerekce}
-          onChange={(e) => setGerekce(e.target.value)}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
           placeholder={
-            olumsuz ? "Talebin neden karşılanmadığı" : "İsteğe bağlı — boş bırakılabilir"
+            isNegative ? "Talebin neden karşılanmadığı" : "İsteğe bağlı — boş bırakılabilir"
           }
           className={`mt-2.5 mb-[22px] w-full resize-y rounded-[10px] border px-3 py-2.5 text-[13px] leading-[1.5] outline-none ${
-            gerekceEksik ? "border-uyari" : "border-cizgi-2"
+            reasonMissing ? "border-uyari" : "border-cizgi-2"
           }`}
         />
 
-        <EtiketBasligi>Muhatap</EtiketBasligi>
+        <SectionLabel>Muhatap</SectionLabel>
         <input
-          value={muhatapAd}
-          onChange={(e) => setMuhatapAd(e.target.value)}
+          value={recipientName}
+          onChange={(e) => setRecipientName(e.target.value)}
           placeholder="Ad Soyad / Kurum"
           className="mt-2.5 mb-2.5 w-full rounded-[10px] border border-cizgi-2 px-3 py-2.5 text-[13px] outline-none"
         />
@@ -182,9 +182,9 @@ export function ReplyView() {
             <button
               key={t}
               type="button"
-              onClick={() => setMuhatapTur(t)}
+              onClick={() => setRecipientType(t)}
               className={`flex-1 rounded-[9px] border p-2 text-[12.5px] font-semibold transition-colors ${
-                muhatapTur === t
+                recipientType === t
                   ? "border-metin bg-metin text-white"
                   : "border-cizgi-2 bg-white text-govde"
               }`}
@@ -201,29 +201,29 @@ export function ReplyView() {
 
         <button
           type="button"
-          disabled={uret.isPending || gerekceEksik}
-          onClick={() => uret.mutate(false)}
+          disabled={generate.isPending || reasonMissing}
+          onClick={() => generate.mutate(false)}
           className="w-full rounded-[11px] bg-gib p-3 text-[13.5px] font-semibold text-white transition-colors hover:bg-gib-koyu disabled:opacity-40"
         >
-          {uret.isPending ? "Taslak üretiliyor…" : "Taslak üret"}
+          {generate.isPending ? "Taslak üretiliyor…" : "Taslak üret"}
         </button>
-        {uret.isPending && (
+        {generate.isPending && (
           <p className="mt-2 text-[11.5px] leading-relaxed text-silik">
             Dil modeli çalışıyor; uydurma sayı bulunursa yazı otomatik yeniden yazdırılır.
           </p>
         )}
-        {uret.error && (
-          <p className="mt-2 text-[11.5px] text-uyari">{(uret.error as Error).message}</p>
+        {generate.error && (
+          <p className="mt-2 text-[11.5px] text-uyari">{(generate.error as Error).message}</p>
         )}
 
-        {gecmis && gecmis.letters.length > 0 && (
+        {history && history.letters.length > 0 && (
           <div className="mt-6">
-            <EtiketBasligi>Kaydedilmiş yazılar</EtiketBasligi>
+            <SectionLabel>Kaydedilmiş yazılar</SectionLabel>
             <div className="mt-2 flex flex-col gap-1">
-              {gecmis.letters.map((l) => (
+              {history.letters.map((l) => (
                 <div key={l.id} className="text-[11.5px] text-silik">
                   <span className="font-medium text-govde">
-                    {KARARLAR.find((k) => k.deger === l.karar)?.etiket ?? l.karar}
+                    {DECISIONS.find((d) => d.value === l.karar)?.label ?? l.karar}
                   </span>{" "}
                   {l.sayi}
                 </div>
@@ -241,21 +241,23 @@ export function ReplyView() {
                 Cevap yazısı taslağı
               </div>
               <div className="flex flex-wrap gap-2">
-                <IkincilDugme onClick={() => void kopyala()}>
-                  {kopyalandi ? "Kopyalandı" : "Kopyala"}
-                </IkincilDugme>
-                <IkincilDugme
-                  disabled={uret.isPending}
-                  onClick={() => uret.mutate(true)}
-                  baslik="Giden evrak sıra numarası alır ve yazıyı kaydeder"
+                <SecondaryButton onClick={() => void copy()}>
+                  {copied ? "Kopyalandı" : "Kopyala"}
+                </SecondaryButton>
+                <SecondaryButton
+                  disabled={generate.isPending}
+                  onClick={() => generate.mutate(true)}
+                  title="Giden evrak sıra numarası alır ve yazıyı kaydeder"
                 >
                   Kaydet (sayı ver)
-                </IkincilDugme>
-                <IkincilDugme onClick={() => void indirDosya("docx")}>DOCX indir</IkincilDugme>
+                </SecondaryButton>
+                <SecondaryButton onClick={() => void downloadFile("docx")}>
+                  DOCX indir
+                </SecondaryButton>
                 <button
                   type="button"
                   title="PDF olarak dışarı alır ve evrakı arşivde cevaplananlara taşır"
-                  onClick={() => void indirDosya("pdf")}
+                  onClick={() => void downloadFile("pdf")}
                   className="rounded-lg bg-metin px-3 py-[7px] text-xs font-semibold text-white transition-colors hover:bg-black"
                 >
                   Onayla ve arşivle
@@ -263,18 +265,18 @@ export function ReplyView() {
               </div>
             </div>
 
-            {uyarilar.length > 0 && (
+            {warnings.length > 0 && (
               <div className="border-b border-uyari-cizgi bg-uyari-zemin px-6 py-2.5">
-                {uyarilar.map((u) => (
-                  <div key={u} className="text-[11px] leading-relaxed text-uyari">
-                    ⚠ {u}
+                {warnings.map((w) => (
+                  <div key={w} className="text-[11px] leading-relaxed text-uyari">
+                    ⚠ {w}
                   </div>
                 ))}
               </div>
             )}
 
             <iframe
-              ref={cerceveRef}
+              ref={frameRef}
               title="Cevap yazısı önizleme"
               srcDoc={html}
               className="block h-[900px] w-full border-0"
@@ -298,9 +300,9 @@ export function ReplyView() {
           </div>
         )}
 
-        {indirmeHatasi && (
+        {downloadError && (
           <div className="mx-auto mt-3 max-w-[720px]">
-            <UyariKutusu>{indirmeHatasi}</UyariKutusu>
+            <WarningBox>{downloadError}</WarningBox>
           </div>
         )}
       </div>
@@ -308,15 +310,15 @@ export function ReplyView() {
   );
 }
 
-function IkincilDugme({
+function SecondaryButton({
   onClick,
   disabled = false,
-  baslik,
+  title,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
-  baslik?: string;
+  title?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -324,7 +326,7 @@ function IkincilDugme({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={baslik}
+      title={title}
       className="rounded-lg border border-cizgi-2 bg-white px-3 py-[7px] text-xs font-semibold text-govde transition-colors hover:border-cizgi-5 disabled:opacity-40"
     >
       {children}
@@ -333,9 +335,9 @@ function IkincilDugme({
 }
 
 /** Onizleme cercevesini iceriğinin boyuna uydurur — ic scroll olmasin. */
-function yuksekligiAyarla(cerceve: HTMLIFrameElement | null): void {
-  const govde = cerceve?.contentDocument?.body;
-  if (cerceve && govde) cerceve.style.height = `${govde.scrollHeight + 24}px`;
+function fitHeight(frame: HTMLIFrameElement | null): void {
+  const body = frame?.contentDocument?.body;
+  if (frame && body) frame.style.height = `${body.scrollHeight + 24}px`;
 }
 
 /**
@@ -345,15 +347,15 @@ function yuksekligiAyarla(cerceve: HTMLIFrameElement | null): void {
  * imza blogunu silebilirdi; bunlar sablondan/veritabanindan geliyor ve elle
  * degistirilmemeli.
  */
-function duzenlemeyiAc(cerceve: HTMLIFrameElement | null): void {
-  const belge = cerceve?.contentDocument;
-  if (!belge) return;
-  for (const secici of DUZENLENEBILIR) {
+function enableEditing(frame: HTMLIFrameElement | null): void {
+  const frameDoc = frame?.contentDocument;
+  if (!frameDoc) return;
+  for (const selector of EDITABLE_BLOCKS) {
     // DIKKAT: burada `el instanceof HTMLElement` KULLANILMAZ. Iframe kendi
     // JS realm'inde calisir; icindeki dugumler o pencerenin HTMLElement'inden
     // turer ve ana pencerenin HTMLElement'ine gore instanceof HER ZAMAN false
     // doner. Once bu kontrol vardi ve onizleme sessizce salt okunur kaliyordu.
-    const el = belge.querySelector<HTMLElement>(secici);
+    const el = frameDoc.querySelector<HTMLElement>(selector);
     if (!el) continue;
     el.contentEditable = "true";
     el.style.outline = "none";
@@ -369,27 +371,27 @@ function duzenlemeyiAc(cerceve: HTMLIFrameElement | null): void {
  * yaptigi duzeltme PDF'e yansiyip DOCX'e yansimazdi. Sablonun sinif adlari
  * sabit oldugu icin geri okuma guvenli.
  */
-export function duzenlemeyiModeleYaz(model: LetterModel, belge: Document | null): LetterModel {
-  if (!belge) return model;
+export function applyEditsToModel(model: LetterModel, frameDoc: Document | null): LetterModel {
+  if (!frameDoc) return model;
 
-  const metin = [...belge.querySelectorAll(".metin p")];
-  const paragraflar = metin
+  const nodes = [...frameDoc.querySelectorAll(".metin p")];
+  const paragraphs = nodes
     .filter((p) => !p.classList.contains("kapanis"))
     .map((p) => (p.textContent ?? "").trim())
     .filter(Boolean);
-  const kapanis = (belge.querySelector(".metin .kapanis")?.textContent ?? "").trim();
-  const ilgiSatirlari = [...belge.querySelectorAll(".ilgi-satir")]
+  const closing = (frameDoc.querySelector(".metin .kapanis")?.textContent ?? "").trim();
+  const references = [...frameDoc.querySelectorAll(".ilgi-satir")]
     .map((s) => (s.textContent ?? "").trim())
     .filter(Boolean);
-  const konu = (belge.querySelector(".konu")?.textContent ?? "")
+  const subject = (frameDoc.querySelector(".konu")?.textContent ?? "")
     .replace(/^\s*Konu\s*:?\s*/u, "")
     .trim();
 
   return {
     ...model,
-    konu: konu || model.konu,
-    paragraflar: paragraflar.length ? paragraflar : model.paragraflar,
-    kapanis: kapanis || model.kapanis,
-    ilgiSatirlari,
+    konu: subject || model.konu,
+    paragraflar: paragraphs.length ? paragraphs : model.paragraflar,
+    kapanis: closing || model.kapanis,
+    ilgiSatirlari: references,
   };
 }

@@ -2,40 +2,40 @@ import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
-import { DurumChip, Hata, Yukleniyor } from "../components/ui.tsx";
+import { ErrorBox, Loading, StatusChip } from "../components/ui.tsx";
 import { RightPanel } from "./RightPanel.tsx";
-import { HeaderNav, sonEvrakiHatirla } from "./HeaderNav.tsx";
+import { HeaderNav, rememberLastDocument } from "./HeaderNav.tsx";
 import type { ChatMessage, DocumentSummary } from "../api/types.ts";
 
 /** Sag panelin kendiliginden kapandigi genislik. */
-const DAR_ESIK = 1150;
+const NARROW_BREAKPOINT = 1150;
 /** Cevap yazisi ekrani iki kolonlu; bunun altinda sag panele yer kalmiyor. */
-const CEVAP_ESIK = 1400;
+const REPLY_BREAKPOINT = 1400;
 
-export interface EvrakBaglam {
+export interface DocumentContext {
   doc: DocumentSummary & { path: string };
   chat: ChatMessage[];
   /** Sohbete aticlanan ek belgeler bu kimlige baglanir. */
   sessionId: string;
 }
 
-export const useEvrak = () => useOutletContext<EvrakBaglam>();
+export const useDocumentContext = () => useOutletContext<DocumentContext>();
 
 /**
  * Evrak ekranlarinin cercevesi: baslik serisi, sag detay paneli ve icerik.
  *
  * Sohbet ile cevap yazisi AYRI ROTALARDIR ama ayni cerceveyi paylasir; boylece
- * "← Sohbete dön" gercek bir geri gidistir ve dogrudan .../cevap-yazisi ile
- * acilan bir baglanti da dogru ekrani gosterir.
+ * "← Sohbete dön" gercek bir geri gidistir ve dogrudan .../reply ile acilan bir
+ * baglanti da dogru ekrani gosterir.
  */
-export function EvrakLayout() {
+export function DocumentLayout() {
   const { docId = "" } = useParams<{ docId: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const cevapEkrani = useLocation().pathname.endsWith("/cevap-yazisi");
+  const onReply = useLocation().pathname.endsWith("/reply");
   const sessionId = useMemo(() => crypto.randomUUID(), [docId]);
 
-  const [panelAcik, setPanelAcik] = useState(() => window.innerWidth >= DAR_ESIK);
+  const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= NARROW_BREAKPOINT);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["document", docId],
@@ -51,7 +51,7 @@ export function EvrakLayout() {
   useEffect(() => {
     if (!docId) return;
     // Servis ekranindan "Asistan"a donuldugunde bu evraga geri gelinsin.
-    sonEvrakiHatirla(docId);
+    rememberLastDocument(docId);
     void api
       .markOpened(docId)
       .then(() => qc.invalidateQueries({ queryKey: ["archive"] }))
@@ -60,19 +60,19 @@ export function EvrakLayout() {
 
   // Pencere daraldiginda paneli kapat; kullanici ⚙ ile yeniden acabilir.
   useEffect(() => {
-    const olcu = () => {
-      if (window.innerWidth < DAR_ESIK) setPanelAcik(false);
+    const onResize = () => {
+      if (window.innerWidth < NARROW_BREAKPOINT) setPanelOpen(false);
     };
-    window.addEventListener("resize", olcu);
-    return () => window.removeEventListener("resize", olcu);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
-    if (cevapEkrani && window.innerWidth < CEVAP_ESIK) setPanelAcik(false);
-  }, [cevapEkrani]);
+    if (onReply && window.innerWidth < REPLY_BREAKPOINT) setPanelOpen(false);
+  }, [onReply]);
 
-  if (isLoading) return <Yukleniyor ne="Belge yükleniyor" />;
-  if (error) return <Hata hata={error} />;
+  if (isLoading) return <Loading what="Belge yükleniyor" />;
+  if (error) return <ErrorBox error={error} />;
   if (!data) return null;
 
   const doc = data.document;
@@ -82,10 +82,10 @@ export function EvrakLayout() {
       <header className="flex h-[60px] flex-[0_0_60px] items-center gap-3 border-b border-cizgi bg-white px-5">
         <HeaderNav />
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          {cevapEkrani && (
+          {onReply && (
             <button
               type="button"
-              onClick={() => navigate(`/evrak/${docId}`)}
+              onClick={() => navigate(`/documents/${docId}`)}
               className="flex items-center gap-1.5 rounded-lg border border-cizgi-2 bg-white py-1.5 pr-[11px] pl-[9px] text-[12.5px] font-semibold whitespace-nowrap transition-colors hover:border-cizgi-5"
             >
               ← Sohbete dön
@@ -105,11 +105,11 @@ export function EvrakLayout() {
               KVKK
             </span>
           )}
-          <DurumChip doc={doc} />
-          {!cevapEkrani && (
+          <StatusChip doc={doc} />
+          {!onReply && (
             <button
               type="button"
-              onClick={() => navigate(`/evrak/${docId}/cevap-yazisi`)}
+              onClick={() => navigate(`/documents/${docId}/reply`)}
               className="rounded-[9px] bg-gib px-3.5 py-2 text-[12.5px] font-semibold whitespace-nowrap text-white transition-colors hover:bg-gib-koyu"
             >
               Cevap yazısı
@@ -118,9 +118,9 @@ export function EvrakLayout() {
           <button
             type="button"
             title="Belge detayları"
-            onClick={() => setPanelAcik((a) => !a)}
+            onClick={() => setPanelOpen((open) => !open)}
             className={`flex items-center gap-1.5 rounded-[9px] border border-cizgi-2 px-3 py-2 text-govde transition-colors hover:border-cizgi-5 ${
-              panelAcik ? "bg-yuzey" : "bg-white"
+              panelOpen ? "bg-yuzey" : "bg-white"
             }`}
           >
             <span className="text-sm leading-none">⚙</span>
@@ -131,9 +131,9 @@ export function EvrakLayout() {
 
       <div className="flex min-h-0 flex-1 overflow-x-auto">
         <div className="flex min-w-[440px] flex-1 flex-col">
-          <Outlet context={{ doc, chat: data.chat, sessionId } satisfies EvrakBaglam} />
+          <Outlet context={{ doc, chat: data.chat, sessionId } satisfies DocumentContext} />
         </div>
-        {panelAcik && <RightPanel doc={doc} kapat={() => setPanelAcik(false)} />}
+        {panelOpen && <RightPanel doc={doc} onClose={() => setPanelOpen(false)} />}
       </div>
     </>
   );
