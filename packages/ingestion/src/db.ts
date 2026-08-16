@@ -152,6 +152,18 @@ export async function migrate(): Promise<void> {
     ALTER TABLE response_letters ADD COLUMN IF NOT EXISTS sayi TEXT;
     CREATE SEQUENCE IF NOT EXISTS response_letter_no_seq START 1;
 
+    -- Faz 5b: chat oturumuna ozel gecici dokumanlar (ana koleksiyona karismaz).
+    -- Asagidaki Faz 5e geri doldurmasi bu tablodan okudugu icin ondan ONCE
+    -- olusturulmali; sifirdan kurulan veritabaninda aksi halde 42P01 verir.
+    CREATE TABLE IF NOT EXISTS session_uploads (
+      session_id TEXT NOT NULL,
+      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (session_id, document_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_session_uploads_expiry ON session_uploads (expires_at);
+
     -- Faz 5e: sohbete aticlanan belge, KALICI olarak evraktan ayrilir.
     --
     -- Once bu ayrim session_uploads tablosundaki TTL'li kayittan turetiliyordu;
@@ -170,16 +182,6 @@ export async function migrate(): Promise<void> {
            routing_reasoning = NULL, routing_regulation_refs = NULL,
            routing_status = 'pending', routing_key = NULL, lifecycle_status = 'new'
      WHERE session_id IS NOT NULL AND routing_status <> 'pending';
-
-    -- Faz 5b: chat oturumuna ozel gecici dokumanlar (ana koleksiyona karismaz)
-    CREATE TABLE IF NOT EXISTS session_uploads (
-      session_id TEXT NOT NULL,
-      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-      expires_at TIMESTAMPTZ NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (session_id, document_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_session_uploads_expiry ON session_uploads (expires_at);
   `);
 }
 
