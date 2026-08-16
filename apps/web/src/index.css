@@ -53,6 +53,8 @@
   --shadow-kart: 0 1px 3px rgba(20, 20, 30, 0.06);
   --shadow-balon: 0 1px 2px rgba(20, 20, 30, 0.03);
   --shadow-composer: 0 1px 2px rgba(20, 20, 30, 0.04);
+  /* Segmented nav'in aktif sekmesi: gri yuvadan bir kagit yaprak gibi kalkar. */
+  --shadow-sekme: 0 1px 2px rgba(20, 20, 30, 0.08);
 
   --animate-yukse: albRise 0.35s ease both;
 }

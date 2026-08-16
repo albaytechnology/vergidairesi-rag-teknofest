@@ -53,7 +53,7 @@ export function DurumChip({ doc }: { doc: DocumentSummary }) {
           : ["cevap bekliyor", "bg-gib-acik text-gib"];
   return (
     <span
-      className={`rounded-md px-[9px] py-1 text-[11px] font-semibold whitespace-nowrap ${sinif}`}
+      className={`shrink-0 rounded-md px-[9px] py-1 text-[11px] font-semibold whitespace-nowrap ${sinif}`}
     >
       {etiket}
     </span>

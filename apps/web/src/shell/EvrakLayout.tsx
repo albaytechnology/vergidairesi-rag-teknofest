@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import { DurumChip, Hata, Yukleniyor } from "../components/ui.tsx";
 import { RightPanel } from "./RightPanel.tsx";
+import { HeaderNav, sonEvrakiHatirla } from "./HeaderNav.tsx";
 import type { ChatMessage, DocumentSummary } from "../api/types.ts";
 
 /** Sag panelin kendiliginden kapandigi genislik. */
@@ -49,6 +50,8 @@ export function EvrakLayout() {
    */
   useEffect(() => {
     if (!docId) return;
+    // Servis ekranindan "Asistan"a donuldugunde bu evraga geri gelinsin.
+    sonEvrakiHatirla(docId);
     void api
       .markOpened(docId)
       .then(() => qc.invalidateQueries({ queryKey: ["archive"] }))
@@ -77,6 +80,7 @@ export function EvrakLayout() {
   return (
     <>
       <header className="flex h-[60px] flex-[0_0_60px] items-center gap-3 border-b border-cizgi bg-white px-5">
+        <HeaderNav />
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {cevapEkrani && (
             <button

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import { MaddeChip, UyariKutusu } from "../components/ui.tsx";
+import { HeaderNav } from "../shell/HeaderNav.tsx";
 import { evrakBasligi, useEvraklar } from "../hooks/useEvraklar.ts";
 import type { UploadStage } from "../api/types.ts";
 
@@ -87,8 +88,9 @@ export function HomeView() {
 
   return (
     <>
-      <header className="flex h-[60px] flex-[0_0_60px] items-center border-b border-cizgi bg-white px-5">
-        <span className="text-[13px] text-silik">
+      <header className="flex h-[60px] flex-[0_0_60px] items-center gap-3 border-b border-cizgi bg-white px-5">
+        <HeaderNav />
+        <span className="truncate text-[13px] text-silik">
           Evrak asistanı — bir dilekçe seçin ya da yeni evrak ekleyin
         </span>
       </header>

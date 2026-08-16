@@ -552,9 +552,20 @@ dayanakları. Çalışan bir evrakla uğraşırken sekme değiştirmiyor.
 | `/` | Ana ekran — evrak bırakma alanı + henüz açılmamış evrak önerileri |
 | `/evrak/:docId` | Belge sohbeti (SSE akışı, ataçla referans belge ekleme) |
 | `/evrak/:docId/cevap-yazisi` | Cevap yazısı: solda karar formu, sağda düzenlenebilir önizleme |
+| `/servisler` | Servis dağılımı — yönetmelik hiyerarşisine göre gruplanmış havuzlar |
+| `/servisler/:servisAdi` | Tek servisin havuzu; `belirlenemedi` manuel inceleme havuzudur |
 
 Eski yollar (`/document/:docId`, `/arsiv`, `/evrak-ekle`, `/queue/:servis`)
 karşılıklarına yönlendirilir — dışarıya verilmiş bağlantılar kırılmasın.
+
+**Servisler ayrı bir sayfa değil, ikinci görünüm.** Header'ın solundaki
+`Asistan · Servisler` segmented navigasyonu yalnızca orta alanı değiştirir; sol
+şerit ve header yerinde kalır. Havuz görünümü geri getirildi çünkü "hangi
+servise ne düştü" sorusu evrak bazlı geçmişten türetilemiyor: şerit *senin*
+açtıklarını gösterir, havuz *dairenin* iş yükünü. Havuzdan seçilen evrak açılmış
+sayılır, yani şerite girer. `Asistan` sekmesi son çalışılan evrağa döner — bu
+tamamen sekmeye özel bir gezinme durumu olduğu için `sessionStorage`'da tutulur,
+sunucuya yazılmaz.
 
 **Sol şerit bir havuz değil, geçmiştir.** Yalnızca *açılmış* evrak listelenir;
 sunucudaki karşılığı `lifecycle_status = 'in_progress'` — yani `POST
