@@ -30,23 +30,16 @@ sayfa.on("request", (r) => {
 });
 
 try {
-  await sayfa.goto(WEB, { waitUntil: "networkidle" });
-
-  // DOLU bir havuz sec — bos havuzda test edilecek belge olmaz.
-  const katalog = (await (await sayfa.request.get(`${WEB}/api/services`)).json()) as {
-    services: { servis: string; bekleyen: number }[];
+  // Cevabi yazilmamis bir evrak sec — bos sistemde test edilecek belge olmaz.
+  const arsiv = (await (await sayfa.request.get(`${WEB}/api/archive?durum=pending`)).json()) as {
+    documents: { id: string }[];
   };
-  const dolu = katalog.services.find((s) => s.bekleyen > 0);
-  assert.ok(dolu, "Hiçbir havuzda evrak yok — önce: pnpm pipeline");
-  await sayfa.goto(`${WEB}/queue/${encodeURIComponent(dolu.servis)}`, {
-    waitUntil: "networkidle",
-  });
-  const belge = sayfa.locator("a[href^='/document/']").first();
-  assert.ok(await belge.count(), "Havuzda belge yok — once: pnpm pipeline");
-  await belge.click();
-  await sayfa.waitForLoadState("networkidle");
+  const belge = arsiv.documents[0];
+  assert.ok(belge, "Cevap bekleyen evrak yok — önce: pnpm pipeline");
 
-  await sayfa.getByRole("button", { name: "Cevap Yazısı" }).click();
+  // Cevap yazisi AYRI bir rota: dogrudan acilabilmesi de sozlesmenin parcasi.
+  await sayfa.goto(`${WEB}/evrak/${belge.id}/cevap-yazisi`, { waitUntil: "networkidle" });
+
   await sayfa.getByRole("button", { name: "Taslak üret" }).click();
   await sayfa.waitForSelector("iframe[title='Cevap yazısı önizleme']", { timeout: 600_000 });
   await sayfa.waitForTimeout(1500);
@@ -69,9 +62,11 @@ try {
   await paragraf.click();
   await sayfa.keyboard.type(`${ISARET} `);
 
-  for (const bicim of ["PDF", "DOCX"] as const) {
+  // "Onayla ve arşivle" PDF'i disari alan ve evraki arsivde tamamlananlara
+  // tasiyan aksiyondur; DOCX ayri bir cikti olarak yaninda durur.
+  for (const dugme of ["DOCX indir", "Onayla ve arşivle"]) {
     const indirme = sayfa.waitForEvent("download", { timeout: 120_000 });
-    await sayfa.getByRole("button", { name: `${bicim} indir` }).click();
+    await sayfa.getByRole("button", { name: dugme }).click();
     await indirme;
   }
   await sayfa.waitForTimeout(400);

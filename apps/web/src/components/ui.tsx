@@ -1,164 +1,83 @@
 import type { ReactNode } from "react";
+import type { DocumentSummary } from "../api/types.ts";
 
-export function Sayfa({ children, dar = false }: { children: ReactNode; dar?: boolean }) {
-  return <div className={`mx-auto ${dar ? "max-w-5xl" : "max-w-7xl"} px-6 py-6`}>{children}</div>;
-}
-
-export function Kart({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-lg border border-cizgi bg-white ${className}`}>{children}</div>;
-}
-
-export function Baslik({ children }: { children: ReactNode }) {
+/** Bolum etiketi — sag panel ve cevap yazisi formunda tekrar eden 10.5px baslik. */
+export function EtiketBasligi({ children }: { children: ReactNode }) {
   return (
-    <h2 className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-ikincil">
+    <div className="text-[10.5px] font-semibold tracking-[.09em] text-silik uppercase">
       {children}
-    </h2>
+    </div>
   );
 }
 
 /**
- * Bolum basligi — sol kenarda GIB kirmizisi dikey cizgi.
- * Yonetmelik hiyerarsisindeki "Ana Hizmet Birimleri / Diger Hizmet Birimleri"
- * ayrimi ekranda da net gorunmeli; kucuk gri bir etiket bunu tasimiyordu.
+ * Yonetmelik madde numarasi.
+ *
+ * Iki zeminde de kullanilir: beyaz kart uzerinde dolgulu, gri kart uzerinde
+ * cerceveli — ikisi de ayni bilgiyi tasir, yalnizca kontrasti korur.
  */
-export function BolumBasligi({ baslik, aciklama }: { baslik: string; aciklama?: string }) {
+export function MaddeChip({
+  children,
+  ton = "dolgu",
+}: {
+  children: ReactNode;
+  ton?: "dolgu" | "cerceve";
+}) {
   return (
-    <div className="mb-4 border-l-4 border-gib pl-3">
-      <h2 className="text-lg font-bold text-metin">{baslik}</h2>
-      {aciklama && <p className="text-sm text-ikincil">{aciklama}</p>}
+    <span
+      className={`rounded-[5px] px-1.5 py-[3px] font-mono text-[10px] text-ikincil ${
+        ton === "dolgu" ? "bg-yuzey" : "border border-cizgi bg-white"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Evrakin tek bakista durumu.
+ *
+ * Yasam dongusu yonlendirme durumundan ONCE gelir: cevabi yazilmis bir evrak,
+ * hangi servise yonlendirildiginden bagimsiz olarak "cevaplandi"dir.
+ * "belirlenemedi" bir hata degil TASARLANMIS bir sonuc — manuel inceleme
+ * istedigini soyler, bu yuzden kirmizi degil kehribar.
+ */
+export function DurumChip({ doc }: { doc: DocumentSummary }) {
+  const [etiket, sinif] =
+    doc.yasamDongusu === "completed"
+      ? ["cevaplandı", "bg-onay-zemin text-onay"]
+      : doc.routing.durum === "belirlenemedi"
+        ? ["manuel inceleme", "bg-uyari-zemin-2 text-uyari"]
+        : doc.routing.durum === "routed"
+          ? ["yönlendirildi", "bg-gib-acik text-gib"]
+          : ["cevap bekliyor", "bg-gib-acik text-gib"];
+  return (
+    <span
+      className={`rounded-md px-[9px] py-1 text-[11px] font-semibold whitespace-nowrap ${sinif}`}
+    >
+      {etiket}
+    </span>
+  );
+}
+
+export function UyariKutusu({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-uyari-cizgi bg-uyari-zemin px-2.5 py-2 text-[11px] leading-[1.5] text-uyari">
+      {children}
     </div>
   );
 }
 
 export function Yukleniyor({ ne = "Yükleniyor" }: { ne?: string }) {
-  return <div className="p-6 text-sm text-ikincil">{ne}…</div>;
-}
-
-/** Kart izgarasi icin iskelet — bos ekran yerine yerlesim onizlemesi. */
-export function KartIskeleti({ adet = 6 }: { adet?: number }) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: adet }, (_, i) => (
-        <div key={i} className="h-24 animate-pulse rounded-lg border border-cizgi bg-white">
-          <div className="p-4">
-            <div className="h-4 w-2/3 rounded bg-slate-200" />
-            <div className="mt-3 h-3 w-16 rounded bg-slate-100" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function SatirIskeleti({ adet = 4 }: { adet?: number }) {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: adet }, (_, i) => (
-        <div key={i} className="h-20 animate-pulse rounded-lg border border-cizgi bg-white" />
-      ))}
-    </div>
-  );
+  return <div className="p-7 text-[13px] text-silik">{ne}…</div>;
 }
 
 export function Hata({ hata }: { hata: unknown }) {
   return (
-    <div className="m-4 rounded border border-uyari/30 bg-gib-acik p-4 text-sm text-uyari">
-      {hata instanceof Error ? hata.message : "Beklenmeyen bir hata oluştu."}
+    <div className="m-5">
+      <UyariKutusu>
+        {hata instanceof Error ? hata.message : "Beklenmeyen bir hata oluştu."}
+      </UyariKutusu>
     </div>
-  );
-}
-
-export function Bos({ children }: { children: ReactNode }) {
-  return <div className="p-8 text-center text-sm text-ikincil">{children}</div>;
-}
-
-type RozetTonu = "notr" | "onay" | "uyari" | "gib";
-
-const TONLAR: Record<RozetTonu, string> = {
-  notr: "bg-slate-100 text-ikincil",
-  onay: "bg-emerald-50 text-onay",
-  uyari: "bg-amber-50 text-uyari",
-  gib: "bg-gib-acik text-gib",
-};
-
-export function Rozet({ ton = "notr", children }: { ton?: RozetTonu; children: ReactNode }) {
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${TONLAR[ton]}`}>
-      {children}
-    </span>
-  );
-}
-
-/**
- * Yonlendirme durumunu tek bakista okunur hale getirir.
- * "belirlenemedi" bir hata degil, TASARLANMIS bir sonuc — manuel inceleme
- * gerektigini soyler; bu yuzden kirmizi degil kehribar tonda.
- */
-export function DurumRozeti({ durum }: { durum: string }) {
-  if (durum === "routed") return <Rozet ton="onay">yönlendirildi</Rozet>;
-  if (durum === "belirlenemedi") return <Rozet ton="uyari">manuel inceleme</Rozet>;
-  return <Rozet>işleniyor</Rozet>;
-}
-
-/**
- * Evrakin is akisi durumu. Yonlendirme durumundan (DurumRozeti) ayridir:
- * o "hangi servise" sorusunu, bu "is nerede kaldi" sorusunu cevaplar.
- */
-export function YasamRozeti({ durum }: { durum: string }) {
-  const tanim: Record<string, { etiket: string; sinif: string }> = {
-    new: { etiket: "Yeni", sinif: "bg-slate-100 text-ikincil" },
-    routed: { etiket: "Yönlendirildi", sinif: "bg-sky-50 text-sky-800" },
-    in_progress: { etiket: "Serviste işleniyor", sinif: "bg-amber-50 text-uyari" },
-    completed: { etiket: "Cevap yazıldı", sinif: "bg-emerald-50 text-onay" },
-  };
-  const t = tanim[durum] ?? tanim["new"]!;
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${t.sinif}`}>{t.etiket}</span>
-  );
-}
-
-/**
- * Kararın yönetmelikteki dayanağı.
- *
- * Burada eskiden `guvenSkoru` gösteriliyordu; o sayı MODELIN KENDI BEYANI ve
- * pratikte hep 0.80 çıkıyor (16 belgenin 15'i) — hiçbir şeyi ayırt etmediği
- * hâlde hesaplanmış bir ölçüt gibi duruyordu. Yerine gerçekten bilgi taşıyan
- * şeyi koyuyoruz: kararın dayandığı ve `verifyCitations` tarafından
- * DOĞRULANMIŞ madde numaraları. Uydurma atıflar zaten elenmiş oluyor.
- */
-export function Dayanak({ maddeler }: { maddeler: { maddeNo: string; baslik: string }[] }) {
-  if (!maddeler.length) return <Rozet ton="uyari">dayanak yok</Rozet>;
-  const ilk = maddeler.slice(0, 2);
-  return (
-    <span
-      title={maddeler.map((m) => `Madde ${m.maddeNo} — ${m.baslik}`).join("\n")}
-      className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-ikincil"
-    >
-      {ilk.map((m) => `M.${m.maddeNo}`).join(" · ")}
-      {maddeler.length > ilk.length ? ` +${maddeler.length - ilk.length}` : ""}
-    </span>
-  );
-}
-
-/**
- * Model kendi kararından şüpheliyse uyarır.
- *
- * Skor bir başarı göstergesi olarak GÖSTERILMEZ (bkz. Dayanak); yalnızca
- * olağan aralığın altına düştüğünde, yani modelin kendisi tereddüt bildirdiğinde
- * görünür. O durumda taşıdığı tek bilgi budur.
- */
-const DUSUK_GUVEN_ESIGI = 0.8;
-
-export function DusukGuvenUyarisi({ skor }: { skor: number | null }) {
-  if (skor === null || skor >= DUSUK_GUVEN_ESIGI) return null;
-  return <Rozet ton="uyari">zayıf eşleşme ({skor.toFixed(2)})</Rozet>;
-}
-
-/** Cevap yazisi uretilmis evrak — havuzda durur ama is beklemez. */
-export function CevaplandiRozeti() {
-  return (
-    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-onay">
-      Cevap yazısı yazılmıştır
-    </span>
   );
 }

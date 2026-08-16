@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client.ts";
 import { streamChat } from "../api/sse.ts";
-import type { ChatMessage } from "../api/types.ts";
-import { Rozet } from "./ui.tsx";
+import { useEvrak } from "../shell/EvrakLayout.tsx";
 
 interface Mesaj {
   role: "user" | "assistant";
@@ -22,6 +21,12 @@ const KABUL_EDILEN = ".pdf,.docx,.xlsx,.pptx,.txt,.md,.html";
 const YOKLAMA_MS = 2000;
 const YOKLAMA_SINIRI = 90; // ~3 dk: parse + chunk + analiz + embed
 
+const HIZLI_SORULAR = [
+  "Özet çıkar",
+  "Yönlendirme neden bu servis?",
+  "Onaylayacak şekilde cevap yazısı yaz",
+];
+
 /**
  * Belge kapsamli sohbet.
  *
@@ -30,19 +35,13 @@ const YOKLAMA_SINIRI = 90; // ~3 dk: parse + chunk + analiz + embed
  * tarafinda "iptal edildi" mesajini gecmise EKLEMIYORUZ, ekranda gosterip
  * biraktigimiz sey sunucudakiyle ayni kalsin.
  *
- * Ek belge (atac): oturuma ozel yuklenir ve yalnizca bu sohbette kaynak olur.
+ * Ek belge (atac): oturuma ozel yuklenir ve yalnizca bu sohbette kaynak olur —
+ * resmi evrak sayilmaz, servis havuzlarina ve arsive dusmez.
  */
-export function ChatPanel({
-  docId,
-  sessionId,
-  baslangic,
-}: {
-  docId: string;
-  sessionId: string;
-  baslangic: ChatMessage[];
-}) {
+export function ChatView() {
+  const { doc, chat, sessionId } = useEvrak();
   const [mesajlar, setMesajlar] = useState<Mesaj[]>(() =>
-    baslangic.map((m) => ({ role: m.role, content: m.content, sources: m.sources })),
+    chat.map((m) => ({ role: m.role, content: m.content, sources: m.sources })),
   );
   const [girdi, setGirdi] = useState("");
   const [akan, setAkan] = useState<string | null>(null);
@@ -52,13 +51,22 @@ export function ChatPanel({
   const iptalRef = useRef<AbortController | null>(null);
   const sonRef = useRef<HTMLDivElement>(null);
   const dosyaRef = useRef<HTMLInputElement>(null);
+  const yaziRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     sonRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [mesajlar, akan, izler]);
 
-  // Sayfadan ayrilirken akisi kes — sunucu istemci koptugunda uretimi durduruyor.
+  // Ekrandan ayrilirken akisi kes — sunucu istemci koptugunda uretimi durduruyor.
   useEffect(() => () => iptalRef.current?.abort(), []);
+
+  // Composer tek satirda baslar, iceriğe gore 120px'e kadar buyur.
+  useEffect(() => {
+    const el = yaziRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [girdi]);
 
   const ekDurumuGuncelle = (path: string, yama: Partial<Ek>) =>
     setEkler((mevcut) => mevcut.map((e) => (e.path === path ? { ...e, ...yama } : e)));
@@ -81,9 +89,7 @@ export function ChatPanel({
     try {
       const sonuc = await api.sessionUpload(sessionId, file);
       setEkler((m) =>
-        m.map((e) =>
-          e.path === gecici.path ? { ...e, path: sonuc.path, durum: "isleniyor" } : e,
-        ),
+        m.map((e) => (e.path === gecici.path ? { ...e, path: sonuc.path, durum: "isleniyor" } : e)),
       );
       for (let i = 0; i < YOKLAMA_SINIRI; i++) {
         await bekle(YOKLAMA_MS);
@@ -110,8 +116,8 @@ export function ChatPanel({
     }
   }
 
-  async function gonder() {
-    const soru = girdi.trim();
+  async function gonder(metin?: string) {
+    const soru = (metin ?? girdi).trim();
     if (!soru || akan !== null) return;
 
     setGirdi("");
@@ -128,7 +134,7 @@ export function ChatPanel({
     try {
       for await (const ev of streamChat({
         question: soru,
-        documentId: docId,
+        documentId: doc.id,
         // Yalnizca hazir ek varsa gonder; aksi halde sunucu bos bir kapsam arar.
         sessionId: ekler.some((e) => e.durum === "hazir") ? sessionId : undefined,
         signal: kontrol.signal,
@@ -155,41 +161,59 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
-        {mesajlar.length === 0 && akan === null && (
-          <p className="pt-8 text-center text-sm text-ikincil">
-            Bu evrak hakkında soru sorun — cevaplar yalnızca belgenin içeriğine dayanır.
-            <br />
-            Ek bir mevzuat veya belge için ataç düğmesini kullanabilirsiniz.
-          </p>
-        )}
-
-        {mesajlar.map((m, i) => (
-          <Balon key={i} mesaj={m} />
-        ))}
-
-        {izler.length > 0 && akan !== null && (
-          <div className="space-y-0.5 text-[11px] text-slate-400">
-            {izler.map((iz, i) => (
-              <div key={i}>· {iz}</div>
+    <>
+      <div className="flex-1 overflow-y-auto px-7 pt-[26px] pb-2">
+        <div className="mx-auto flex max-w-[760px] flex-col gap-[18px]">
+          <div className="flex flex-wrap justify-center gap-2 pb-1.5">
+            {HIZLI_SORULAR.map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={akan !== null}
+                onClick={() => void gonder(s)}
+                className="rounded-full border border-cizgi-2 bg-white px-3 py-[7px] text-xs font-medium text-govde transition-colors hover:border-gib hover:text-gib disabled:opacity-50"
+              >
+                {s}
+              </button>
             ))}
           </div>
-        )}
 
-        {akan !== null && <Balon mesaj={{ role: "assistant", content: akan || "…" }} akiyor />}
+          {mesajlar.length === 0 && akan === null && (
+            <p className="pt-2 text-center text-[12.5px] leading-relaxed text-silik">
+              Bu evrak hakkında soru sorun — cevaplar yalnızca belgenin içeriğine dayanır.
+              <br />
+              Ek bir mevzuat veya belge için ataç düğmesini kullanabilirsiniz.
+            </p>
+          )}
 
-        {hata && (
-          <div className="rounded border border-uyari/30 bg-amber-50 p-2 text-xs text-uyari">
-            {hata}
-          </div>
-        )}
-        <div ref={sonRef} />
+          {mesajlar.map((m, i) => (
+            <Balon key={i} mesaj={m} />
+          ))}
+
+          {izler.length > 0 && akan !== null && (
+            <div className="space-y-0.5 text-[11px] text-soluk">
+              {izler.map((iz, i) => (
+                <div key={i}>· {iz}</div>
+              ))}
+            </div>
+          )}
+
+          {akan !== null && (
+            <Balon mesaj={{ role: "assistant", content: akan || "yazıyor…" }} akiyor />
+          )}
+
+          {hata && (
+            <div className="rounded-lg border border-uyari-cizgi bg-uyari-zemin px-3 py-2 text-[11.5px] text-uyari">
+              {hata}
+            </div>
+          )}
+          <div ref={sonRef} />
+        </div>
       </div>
 
-      <div className="border-t border-cizgi bg-white p-3">
+      <div className="px-7 pt-3 pb-[22px]">
         {ekler.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
+          <div className="mx-auto mb-2 flex max-w-[760px] flex-wrap gap-1.5">
             {ekler.map((e) => (
               <EkChip
                 key={e.path}
@@ -200,7 +224,7 @@ export function ChatPanel({
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="mx-auto flex max-w-[760px] items-end gap-2.5 rounded-[14px] border border-cizgi-2 bg-white py-2.5 pr-2.5 pl-3 shadow-composer">
           <input
             ref={dosyaRef}
             type="file"
@@ -214,15 +238,16 @@ export function ChatPanel({
           />
           <button
             type="button"
-            title="Sohbete belge ekle"
-            aria-label="Sohbete belge ekle"
+            title="Referans belge ekle"
+            aria-label="Referans belge ekle"
             onClick={() => dosyaRef.current?.click()}
-            className="shrink-0 self-end rounded border border-cizgi px-2.5 py-2 text-ikincil hover:bg-slate-50 hover:text-metin"
+            className="flex h-[34px] w-[34px] flex-[0_0_34px] items-center justify-center rounded-[9px] border border-cizgi bg-panel text-ikincil transition-colors hover:border-cizgi-5"
           >
             <AtacIkonu />
           </button>
           <textarea
-            rows={2}
+            ref={yaziRef}
+            rows={1}
             value={girdi}
             onChange={(e) => setGirdi(e.target.value)}
             onKeyDown={(e) => {
@@ -231,14 +256,14 @@ export function ChatPanel({
                 void gonder();
               }
             }}
-            placeholder="Mesajınızı yazın… (Enter ile gönder)"
-            className="min-w-0 flex-1 resize-none rounded border border-cizgi px-3 py-2 text-sm outline-none focus:border-slate-400"
+            placeholder="Belgeye dair bir şey sorun… (Enter ile gönder)"
+            className="max-h-[120px] min-w-0 flex-1 resize-none border-none bg-transparent py-2 text-[13.5px] leading-[1.5] outline-none"
           />
           {akan !== null ? (
             <button
               type="button"
               onClick={() => iptalRef.current?.abort()}
-              className="shrink-0 self-end rounded border border-cizgi px-3 py-2 text-sm hover:bg-slate-50"
+              className="rounded-[9px] border border-cizgi-2 bg-white px-4 py-2 text-[13px] font-semibold text-govde transition-colors hover:border-cizgi-5"
             >
               Durdur
             </button>
@@ -247,14 +272,19 @@ export function ChatPanel({
               type="button"
               onClick={() => void gonder()}
               disabled={!girdi.trim()}
-              className="shrink-0 self-end rounded bg-gib px-4 py-2 text-sm font-medium text-white hover:bg-gib-koyu disabled:opacity-40"
+              className={`rounded-[9px] px-4 py-[9px] text-[13px] font-semibold text-white transition-colors ${
+                girdi.trim() ? "bg-gib hover:bg-gib-koyu" : "bg-gib-solgun"
+              }`}
             >
               Gönder
             </button>
           )}
         </div>
+        <div className="mx-auto mt-2 max-w-[760px] text-center text-[11px] text-soluk">
+          Yanıtlar kaynak belgeye dayandırılır — karar öncesi kaynağı kontrol edin.
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -262,12 +292,12 @@ function EkChip({ ek, onKaldir }: { ek: Ek; onKaldir: () => void }) {
   const suruyor = ek.durum === "yukleniyor" || ek.durum === "isleniyor";
   const renk =
     ek.durum === "hazir"
-      ? "border-emerald-200 bg-emerald-50 text-onay"
+      ? "border-onay/25 bg-onay-zemin text-onay"
       : ek.durum === "hata"
-        ? "border-uyari/30 bg-amber-50 text-uyari"
-        : "border-cizgi bg-slate-50 text-ikincil";
+        ? "border-uyari-cizgi bg-uyari-zemin text-uyari"
+        : "border-cizgi bg-panel text-ikincil";
   return (
-    <span className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${renk}`}>
+    <span className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] ${renk}`}>
       {suruyor && (
         <span className="h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent" />
       )}
@@ -278,7 +308,12 @@ function EkChip({ ek, onKaldir }: { ek: Ek; onKaldir: () => void }) {
         {ek.durum === "hazir" && "hazır"}
         {ek.durum === "hata" && (ek.mesaj ?? "hata")}
       </span>
-      <button type="button" onClick={onKaldir} aria-label="Eki kaldır" className="ml-0.5 opacity-60 hover:opacity-100">
+      <button
+        type="button"
+        onClick={onKaldir}
+        aria-label="Eki kaldır"
+        className="ml-0.5 opacity-60 hover:opacity-100"
+      >
         ✕
       </button>
     </span>
@@ -287,7 +322,7 @@ function EkChip({ ek, onKaldir }: { ek: Ek; onKaldir: () => void }) {
 
 function AtacIkonu() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
     </svg>
   );
@@ -308,20 +343,36 @@ function Metin({ ham }: { ham: string }) {
 function Balon({ mesaj, akiyor = false }: { mesaj: Mesaj; akiyor?: boolean }) {
   const kullanici = mesaj.role === "user";
   return (
-    <div className={kullanici ? "flex justify-end" : ""}>
+    <div className={kullanici ? "flex justify-end" : "flex justify-start"}>
       <div
-        // Kullanici balonu bilerek kirmizi DEGIL: kirmizi aksan rengi, sohbet
-        // boyunca tekrarlanan bir blok degil. Vurgu birincil aksiyonda kalsin.
-        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
-          kullanici ? "bg-metin text-white" : "border border-cizgi bg-white"
-        } ${akiyor ? "animate-pulse" : ""}`}
+        className={
+          kullanici
+            ? "max-w-[76%] rounded-[14px_14px_4px_14px] bg-metin px-4 py-3 text-white"
+            : "max-w-[88%] rounded-[14px_14px_14px_4px] border border-cizgi bg-white px-4 py-3.5 text-metin-2 shadow-balon"
+        }
       >
-        <Metin ham={mesaj.content} />
+        <div
+          className={`text-[13.5px] leading-[1.6] whitespace-pre-wrap text-pretty ${
+            akiyor ? "animate-pulse" : ""
+          }`}
+        >
+          <Metin ham={mesaj.content} />
+        </div>
         {mesaj.sources && mesaj.sources.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1 border-t border-cizgi pt-1.5">
-            {mesaj.sources.map((k) => (
-              <Rozet key={k}>{k}</Rozet>
-            ))}
+          <div className="mt-3 border-t border-cizgi-3 pt-2.5">
+            <div className="mb-1.5 text-[10.5px] font-semibold tracking-[.08em] text-soluk uppercase">
+              Kaynaklar
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {mesaj.sources.map((k) => (
+                <span
+                  key={k}
+                  className="rounded-[7px] border border-cizgi-3 bg-zemin px-[9px] py-1.5 text-[11.5px] text-ikincil"
+                >
+                  {k}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -442,8 +442,9 @@ belirsizlik hem chunk metnine hem yönlendirme çıktısına yazılır. Ayrınt�
 ## Yazışma ve Arşiv — belge yaşam döngüsü (Faz 5e)
 
 Gerçek iş akışında evrak önce Yazışma ve Arşiv Servisi'ne girer, ilgili servise sevk
-edilir, iş bitince buraya döner. `/arsiv` bu döngüyü izler: servis havuzları
-"hangi servise" sorusunu, arşiv paneli "iş nerede kaldı" sorusunu cevaplar.
+edilir, iş bitince buraya döner. Arayüzdeki sol şerit bu döngüyü izler: sağdaki
+yönlendirme kartı "hangi servise" sorusunu, şeritteki "cevap bekleyen /
+cevaplanan" ayrımı "iş nerede kaldı" sorusunu cevaplar.
 
 **Ayrı bir sütun, çünkü `documents.status` zaten dolu.** Spec `status` adında bir
 sütun öneriyordu ama o sütun parse hattının durumunu tutuyor
@@ -541,20 +542,36 @@ dayanak) sağlanıyor; **üslup düzeltmesi insana bırakılmıştır** — aray
 `apps/web` — Vite + React + Tailwind v4 + TanStack Query. Ağır state kütüphanesi yok;
 sunucu durumu TanStack Query'de, yerel durum `useState`'te.
 
+**Tek ekran, üç bölge.** Önceki çok sayfalı yapı (Servisler · Yazışma ve Arşiv ·
+Evrak Ekle · Belge Sohbeti · Cevap Yazısı) tek bir sohbet merkezli arayüzde
+birleştirildi: **solda** sohbet geçmişi, **ortada** iş, **sağda** kararın
+dayanakları. Çalışan bir evrakla uğraşırken sekme değiştirmiyor.
+
 | Route | İçerik |
 |---|---|
-| `/` | Vergi Dairesi Servisleri — yönetmelik hiyerarşisine göre gruplanmış havuzlar |
-| `/arsiv` | Yazışma ve Arşiv — yaşam döngüsüne göre iki liste |
-| `/evrak-ekle` | Evrak giriş noktası: çoklu dosya seçimi + kayıt ilerlemesi |
-| `/queue/:servis` | Havuz listesi; `belirlenemedi` manuel inceleme havuzudur |
-| `/document/:docId` | Ana ekran — sol özet paneli, sağda Sohbet ve Cevap Yazısı sekmeleri |
+| `/` | Ana ekran — evrak bırakma alanı + henüz açılmamış evrak önerileri |
+| `/evrak/:docId` | Belge sohbeti (SSE akışı, ataçla referans belge ekleme) |
+| `/evrak/:docId/cevap-yazisi` | Cevap yazısı: solda karar formu, sağda düzenlenebilir önizleme |
 
-**Kurumsal kimlik.** GİB kırmızısı (`#D42027`) bir **aksandır**, ana renk değil:
-yalnızca aktif sekme, dolu havuz rozeti, birincil aksiyon butonu ve bölüm başlığı
-çizgisinde kullanılır. Genel ton gri-beyaz-slate — ekranda gün boyu evrak okunacak.
-Sohbetteki kullanıcı balonları da bu yüzden kırmızı değil koyu slate.
+Eski yollar (`/document/:docId`, `/arsiv`, `/evrak-ekle`, `/queue/:servis`)
+karşılıklarına yönlendirilir — dışarıya verilmiş bağlantılar kırılmasın.
 
-**İki tür yükleme, iki ayrı anlam.** `/evrak-ekle` **resmî evrak** alır: hattan geçer,
+**Sol şerit bir havuz değil, geçmiştir.** Yalnızca *açılmış* evrak listelenir;
+sunucudaki karşılığı `lifecycle_status = 'in_progress'` — yani `POST
+/api/documents/:id/open` işareti. Ayrı bir "etkileşime girildi" bayrağı
+eklenmedi: ikisi aynı olguyu anlatıyor ve böylece geçmiş, kullanıcının
+tarayıcısından bağımsız olarak sunucuda duruyor. Henüz açılmamış evrak ana
+ekranda öneri kartı olarak bekler.
+
+**Kurumsal kimlik.** Kırmızı (`#d81e2c`) bir **aksandır**, ana renk değil:
+yalnızca birincil aksiyon butonu, aktif satırın sol çizgisi ve "cevap bekliyor"
+rozetinde kullanılır. Genel ton nötr gri-beyaz — ekranda gün boyu evrak
+okunacak. Sohbetteki kullanıcı balonları da bu yüzden kırmızı değil koyu
+mürekkep. Tipografi: Instrument Sans, sayısal değerlerde JetBrains Mono.
+Tasarım kaynağı: `apps/web/design_handoff_alb_ai_chat/`.
+
+**İki tür yükleme, iki ayrı anlam.** Ana ekrandaki bırakma alanı **resmî evrak**
+alır: hattan geçer,
 bir servis havuzuna düşer, cevap yazısı bekler. Belge sohbetindeki **ataç** ise
 *referans* belge alır (ek mevzuat, mükellefin gönderdiği ek): chunk'lanıp embed
 edilir, yani o sohbette aranabilir olur, ama **analiz ve servis yönlendirmesi hiç
