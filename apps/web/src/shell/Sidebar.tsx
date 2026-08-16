@@ -26,11 +26,24 @@ export function Sidebar() {
 
   return (
     <aside className="flex w-[272px] flex-[0_0_272px] flex-col border-r border-cizgi bg-panel">
-      <div className="flex h-[60px] flex-[0_0_60px] items-center gap-[9px] border-b border-cizgi px-[18px]">
-        <span className="flex h-[22px] w-[22px] items-center justify-center rounded-md bg-gib text-[11px] font-bold tracking-[-.02em] text-white">
-          A
-        </span>
-        <span className="text-[15px] font-bold tracking-[.02em]">ALB-AI</span>
+      {/* Marka blogu ana header ile ayni hizada (60px): kurum onde, urun adi
+          altta "Powered by" satirinda. Ekranda gorunen kurum kimligi olmali. */}
+      <div className="flex h-[60px] flex-[0_0_60px] items-center gap-2.5 border-b border-cizgi px-[18px]">
+        <img
+          src="/vdi-logo.png"
+          alt="Vergi Dairesi Başkanlığı"
+          className="h-8 w-8 shrink-0 object-contain"
+        />
+        <div className="min-w-0">
+          <div className="truncate text-[12.5px] leading-tight font-bold tracking-[-.01em]">
+            Vergi Dairesi Başkanlığı
+          </div>
+          {/* 272px seritte bu ad 10px'te tek satira sigmiyor; kirpmak yerine iki
+              satira sariliyor — sistemin adi yarim gorunmemeli. */}
+          <div className="mt-px text-[10px] leading-[1.25] font-medium text-balance text-ikincil">
+            Yapay Zeka Destekli Evrak ve Yazışma Sistemi
+          </div>
+        </div>
       </div>
 
       <div className="px-3.5 pt-3.5 pb-2">
@@ -62,6 +75,12 @@ export function Sidebar() {
           <div className="truncate text-xs font-semibold">{KULLANICI.ad}</div>
           <div className="text-[10.5px] text-silik">{KULLANICI.daire}</div>
         </div>
+      </div>
+
+      {/* Kendi ust cizgisiyle ayri duruyor: bu satir kullanicinin unvani degil,
+          sistemi saglayan urunun adi — ikisi bitisik gorunmemeli. */}
+      <div className="border-t border-cizgi px-4 pt-[9px] pb-3 text-center text-[9.5px] font-semibold tracking-[.06em] text-soluk uppercase">
+        Powered by ALB-AI
       </div>
     </aside>
   );

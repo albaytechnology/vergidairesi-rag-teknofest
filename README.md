@@ -581,6 +581,11 @@ okunacak. Sohbetteki kullanıcı balonları da bu yüzden kırmızı değil koyu
 mürekkep. Tipografi: Instrument Sans, sayısal değerlerde JetBrains Mono.
 Tasarım kaynağı: `apps/web/design_handoff_alb_ai_chat/`.
 
+Şeridin tepesinde **kurum** durur (logo + "Vergi Dairesi Başkanlığı"), ürün adı
+en altta kendi çizgisiyle ayrılmış "Powered by ALB-AI" satırındadır: bu ekran
+bir kurumun evrak sistemi, ürün vitrini değil. Aynı sebeple satır kullanıcı
+bloğuna bitiştirilmez — memurun unvanı gibi okunmamalı.
+
 **İki tür yükleme, iki ayrı anlam.** Ana ekrandaki bırakma alanı **resmî evrak**
 alır: hattan geçer,
 bir servis havuzuna düşer, cevap yazısı bekler. Belge sohbetindeki **ataç** ise
