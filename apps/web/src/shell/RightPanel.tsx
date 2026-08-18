@@ -11,6 +11,26 @@ import type { DocumentSummary } from "../api/types.ts";
  * belge) sohbetin YANINDA durur: calisan cevabi okurken belgeye donmek zorunda
  * kalmasin, iki bilgi ayni ekranda karsilastirilabilsin.
  */
+/**
+ * Evrak tipi rozetinin okunur etiketi.
+ *
+ * Ham deger sunucudaki enum'dur (resmi_yazi, mahkeme_karari…); alt cizgili
+ * snake_case bir rozet ekranda teknik bir artik gibi duruyor. Bilinmeyen bir
+ * deger gelirse ham hali gosterilir — rozet bos kalmasin.
+ */
+const DOC_TYPE_LABELS: Record<string, string> = {
+  dilekce: "Dilekçe",
+  resmi_yazi: "Resmî yazı",
+  bildirim: "Bildirim",
+  beyanname_eki: "Beyanname eki",
+  tebligat: "Tebligat",
+  mahkeme_karari: "Mahkeme kararı",
+  diger: "Diğer",
+};
+
+const docTypeLabel = (docType: string): string =>
+  DOC_TYPE_LABELS[docType] ?? docType.charAt(0).toLocaleUpperCase("tr-TR") + docType.slice(1);
+
 export function RightPanel({
   doc,
   onClose,
@@ -38,8 +58,8 @@ export function RightPanel({
       </p>
       <div className="mb-6 flex items-center gap-2">
         {doc.docType && (
-          <span className="rounded-[5px] bg-gib-acik px-[7px] py-[3px] text-[10.5px] font-semibold text-gib">
-            {doc.docType}
+          <span className="rounded-[5px] border border-gib-cizgi bg-gib-acik px-[7px] py-[3px] text-[10.5px] font-semibold text-gib">
+            {docTypeLabel(doc.docType)}
           </span>
         )}
         <span className="truncate text-[11px] text-silik">{doc.filename}</span>

@@ -45,15 +45,15 @@ export function ArticleChip({
 export function StatusChip({ doc }: { doc: DocumentSummary }) {
   const [label, className] =
     doc.yasamDongusu === "completed"
-      ? ["cevaplandı", "bg-onay-zemin text-onay"]
+      ? ["Cevaplandı", "border-onay-cizgi bg-onay-zemin text-onay"]
       : doc.routing.durum === "belirlenemedi"
-        ? ["manuel inceleme", "bg-uyari-zemin-2 text-uyari"]
+        ? ["Manuel inceleme", "border-uyari-cizgi bg-uyari-zemin-2 text-uyari"]
         : doc.routing.durum === "routed"
-          ? ["yönlendirildi", "bg-gib-acik text-gib"]
-          : ["cevap bekliyor", "bg-gib-acik text-gib"];
+          ? ["Yönlendirildi", "border-gib-cizgi bg-gib-acik text-gib"]
+          : ["Cevap bekliyor", "border-gib-cizgi bg-gib-acik text-gib"];
   return (
     <span
-      className={`shrink-0 rounded-md px-[9px] py-1 text-[11px] font-semibold whitespace-nowrap ${className}`}
+      className={`shrink-0 rounded-md border px-[9px] py-1 text-[11px] font-semibold whitespace-nowrap ${className}`}
     >
       {label}
     </span>

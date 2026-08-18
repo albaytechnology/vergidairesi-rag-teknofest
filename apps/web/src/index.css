@@ -23,6 +23,8 @@
   --color-gib-duman: #fffafb;
   /* Bos composer'in "Gonder" butonu: devre disi ama kirmizinin tonu korunur. */
   --color-gib-solgun: #e9b8bd;
+  /* Rozet cercevesi: gib-acik zeminle ayni ailede, bir ton belirgin. */
+  --color-gib-cizgi: #f7d2d7;
 
   --color-metin: #17171a;
   --color-metin-2: #1f1f24;
@@ -49,6 +51,7 @@
   --color-uyari-cizgi: #fde3c2;
   --color-onay: #1f7a45;
   --color-onay-zemin: #eef7f0;
+  --color-onay-cizgi: #cfe4d7;
 
   --shadow-kart: 0 1px 3px rgba(20, 20, 30, 0.06);
   --shadow-balon: 0 1px 2px rgba(20, 20, 30, 0.03);
