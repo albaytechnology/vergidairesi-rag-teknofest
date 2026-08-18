@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import { streamChat } from "../api/sse.ts";
 import { useDocumentContext } from "../shell/DocumentLayout.tsx";
@@ -60,6 +61,7 @@ export function ChatView() {
   const [traces, setTraces] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const qc = useQueryClient();
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -172,6 +174,10 @@ export function ChatView() {
         setMessages((m) => [...m, { role: "assistant", content: "", letter }]);
       } else if (answer) {
         setMessages((m) => [...m, { role: "assistant", content: answer, sources }]);
+        // Sunucu bu alisverisi gecmise yazdi; onbellekteki kopya artik eksik.
+        // Tazelenmezse baska bir evraga gidip geri donuldugunde ekran, bu
+        // ekranin bastan kuruldugu yerden — onbellekten — eksik beslenirdi.
+        void qc.invalidateQueries({ queryKey: ["document", doc.id] });
       }
     } catch (err) {
       if (!controller.signal.aborted) {

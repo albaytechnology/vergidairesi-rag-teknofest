@@ -131,7 +131,18 @@ export function DocumentLayout() {
 
       <div className="flex min-h-0 flex-1 overflow-x-auto">
         <div className="flex min-w-[440px] flex-1 flex-col">
-          <Outlet context={{ doc, chat: data.chat, sessionId } satisfies DocumentContext} />
+          {/*
+           * key={docId}: baska bir evraga gecildiginde ROTA AYNI kaldigi icin
+           * (/documents/:docId) React alttaki ekrani yeniden kullanirdi ve
+           * ChatView'in mesajlari — bir kez calisan useState baslaticisiyla
+           * kuruldugu icin — onceki evrakta kalirdi. Anahtar degisince ekran
+           * bastan kurulur: mesajlar, ataclar, yazilan metin ve suren akis
+           * (unmount'ta abort edilir) hep birlikte sifirlanir.
+           */}
+          <Outlet
+            key={docId}
+            context={{ doc, chat: data.chat, sessionId } satisfies DocumentContext}
+          />
         </div>
         {panelOpen && <RightPanel doc={doc} onClose={() => setPanelOpen(false)} />}
       </div>
