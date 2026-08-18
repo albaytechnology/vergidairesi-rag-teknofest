@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, download } from "../api/client.ts";
 import { SectionLabel, WarningBox } from "../components/ui.tsx";
 import { useDocumentContext } from "../shell/DocumentLayout.tsx";
+import {
+  DECISIONS,
+  decisionLabel,
+  isNegativeDecision,
+  type ReplyHandoff,
+} from "./letterDecisions.ts";
 import type { LetterDecision, LetterModel } from "../api/types.ts";
-
-const DECISIONS: { value: LetterDecision; label: string; negative: boolean }[] = [
-  { value: "onay", label: "Onay", negative: false },
-  { value: "kismi_onay", label: "Kısmi onay", negative: true },
-  { value: "red", label: "Red", negative: true },
-  { value: "eksik_belge", label: "Eksik belge", negative: true },
-  { value: "bilgilendirme", label: "Bilgilendirme", negative: false },
-];
 
 /** Sablonda serbest duzenlemeye acilan bloklar — antet/imza/sayi korunur. */
 const EDITABLE_BLOCKS = [".konu", ".ilgi-liste", ".metin"];
@@ -23,23 +22,32 @@ const EDITABLE_BLOCKS = [".konu", ".ilgi-liste", ".metin"];
  * blogu) uretiliyor ve ciktinin birebir aynisi gorunmeli — duz metin bir
  * onizleme, calisana imzalayacagi belgeyi gostermezdi. Tasarimin "kagit karti"
  * bu cercevenin disini olusturur.
+ *
+ * Ekrana sohbetteki karttan da gelinebilir; o durumda karar/gerekce/muhatap
+ * location.state ile tasinir ve taslak kendiliginden uretilmeye baslar.
  */
 export function ReplyView() {
   const { doc } = useDocumentContext();
   const docId = doc.id;
-  const [decision, setDecision] = useState<LetterDecision>("onay");
-  const [reason, setReason] = useState("");
-  const [recipientName, setRecipientName] = useState(doc.entities?.kisiKurumlar[0] ?? "");
-  const [recipientType, setRecipientType] = useState<"kisi" | "kurum">("kisi");
+  const handoff = (useLocation().state ?? null) as ReplyHandoff | null;
+  const [decision, setDecision] = useState<LetterDecision>(handoff?.karar ?? "onay");
+  const [reason, setReason] = useState(handoff?.gerekce ?? "");
+  const [recipientName, setRecipientName] = useState(
+    handoff?.muhatapAd || (doc.entities?.kisiKurumlar[0] ?? ""),
+  );
+  const [recipientType, setRecipientType] = useState<"kisi" | "kurum">(
+    handoff?.muhatapTur ?? "kisi",
+  );
   const [model, setModel] = useState<LetterModel | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const autoStarted = useRef(false);
   const qc = useQueryClient();
 
-  const isNegative = DECISIONS.find((d) => d.value === decision)?.negative ?? false;
+  const isNegative = isNegativeDecision(decision);
   const reasonMissing = isNegative && !reason.trim();
 
   const { data: history } = useQuery({
@@ -68,6 +76,20 @@ export function ReplyView() {
       if (persist) void qc.invalidateQueries({ queryKey: ["letters", docId] });
     },
   });
+
+  /**
+   * Sohbetteki karttan gelindiyse taslagi kendiliginden uret — calisan karari
+   * zaten orada verdi, ayni dugmeye bir daha bastirmanin anlami yok.
+   * useRef bayragi StrictMode'un cift mount'unda ikinci bir uretim tetiklemesini
+   * engeller (uretim pahali bir LLM cagrisi).
+   */
+  useEffect(() => {
+    if (!handoff?.autoGenerate || autoStarted.current) return;
+    if (isNegative && !reason.trim()) return; // gerekce eksik: calisan doldursun
+    autoStarted.current = true;
+    generate.mutate(false);
+    // Bos bagimlilik listesi bilerek: yalnizca ilk mount'ta calismali.
+  }, []);
 
   /**
    * Onizlemeyi duzenlemeye ac ve yuksekligini iceriğe gore ayarla.
@@ -222,9 +244,7 @@ export function ReplyView() {
             <div className="mt-2 flex flex-col gap-1">
               {history.letters.map((l) => (
                 <div key={l.id} className="text-[11.5px] text-silik">
-                  <span className="font-medium text-govde">
-                    {DECISIONS.find((d) => d.value === l.karar)?.label ?? l.karar}
-                  </span>{" "}
+                  <span className="font-medium text-govde">{decisionLabel(l.karar)}</span>{" "}
                   {l.sayi}
                 </div>
               ))}

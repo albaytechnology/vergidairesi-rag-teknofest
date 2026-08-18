@@ -171,6 +171,20 @@ export const LetterDecisionSchema = z.enum([
 export type LetterDecision = z.infer<typeof LetterDecisionSchema>;
 
 /**
+ * Evrak sohbetinde bir mesajin niyeti.
+ *
+ * "cevap_yazisi": calisan muhataba gonderilecek resmi bir yazi istiyor —
+ * RAG cevabi degil, sablonla uretilen yazi. Diger her sey "soru".
+ * karar/gerekce mesajdan cikarilabildiginde dolar, aksi halde null.
+ */
+export const ChatIntentSchema = z.object({
+  tur: z.enum(["soru", "cevap_yazisi"]),
+  karar: LetterDecisionSchema.nullish(),
+  gerekce: z.string().nullish(),
+});
+export type ChatIntent = z.infer<typeof ChatIntentSchema>;
+
+/**
  * LLM'in cevap yazisinda uretebilecegi TEK sey: ilgi satirlari ve govde
  * paragraflari. Sayi, tarih, konu, muhatap, kapanis ve imza bloklari
  * sablondan/veritabanindan deterministik gelir — resmi yazinin bicimsel

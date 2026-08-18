@@ -6,17 +6,23 @@
  * cerceveleri ("event: X\ndata: {...}\n\n") elle ayristiriliyor.
  */
 
+import type { LetterDecision } from "./types.ts";
+
 export type ChatEvent =
   | { type: "trace"; message: string }
   | { type: "token"; text: string }
   | { type: "sources"; sources: string[]; hits: { filename: string; page: number | null }[] }
   | { type: "done"; answer: string }
+  /** Sunucu mesaji "cevap yazisi talebi" olarak sinifladi; akis burada biter. */
+  | { type: "intent"; karar: LetterDecision | null; gerekce: string | null }
   | { type: "error"; message: string };
 
 export interface ChatStreamInput {
   question: string;
   documentId?: string;
   sessionId?: string;
+  /** Niyet siniflandirmasini atla — "normal cevap ver" kacis yolu. */
+  skipIntent?: boolean;
   signal?: AbortSignal;
 }
 
@@ -28,6 +34,7 @@ export async function* streamChat(input: ChatStreamInput): AsyncGenerator<ChatEv
       question: input.question,
       documentId: input.documentId,
       sessionId: input.sessionId,
+      niyetAtla: input.skipIntent,
     }),
     signal: input.signal,
   });

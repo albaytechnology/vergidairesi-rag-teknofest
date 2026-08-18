@@ -2,11 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client.ts";
 import { streamChat } from "../api/sse.ts";
 import { useDocumentContext } from "../shell/DocumentLayout.tsx";
+import { LetterPromptCard } from "./LetterPromptCard.tsx";
+import type { LetterDecision } from "../api/types.ts";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: string[];
+  /**
+   * Sunucu bu mesaji "cevap yazisi talebi" olarak sinifladi. Varsa metin balonu
+   * yerine yazi olusturma karti basilir; content o zaman kullanilmaz.
+   */
+  letter?: { karar: LetterDecision | null; gerekce: string | null };
 }
 
 /** Sohbete aticlanmis ek belge. */
@@ -37,6 +44,11 @@ const QUICK_PROMPTS = [
  *
  * Ek belge (atac): oturuma ozel yuklenir ve yalnizca bu sohbette kaynak olur —
  * resmi evrak sayilmaz, servis havuzlarina ve arsive dusmez.
+ *
+ * Cevap yazisi: sunucu mesaji yazi talebi olarak sinifladiginda "intent" olayi
+ * gelir ve RAG cevabi hic uretilmez; yerine sohbete LetterPromptCard dusulur.
+ * Kart gecmise YAZILMAZ — sayfa yenilendiginde kaybolur; kalici iz, yazi
+ * kaydedildiginde cevap yazisi tarafinda olusur.
  */
 export function ChatView() {
   const { doc, chat, sessionId } = useDocumentContext();
@@ -122,7 +134,7 @@ export function ChatView() {
     }
   }
 
-  async function send(text?: string) {
+  async function send(text?: string, opts: { skipIntent?: boolean } = {}) {
     const question = (text ?? input).trim();
     if (!question || streaming !== null) return;
 
@@ -136,6 +148,7 @@ export function ChatView() {
     abortRef.current = controller;
     let answer = "";
     let sources: string[] = [];
+    let letter: Message["letter"];
 
     try {
       for await (const ev of streamChat({
@@ -143,6 +156,7 @@ export function ChatView() {
         documentId: doc.id,
         // Yalnizca hazir ek varsa gonder; aksi halde sunucu bos bir kapsam arar.
         sessionId: attachments.some((a) => a.status === "ready") ? sessionId : undefined,
+        skipIntent: opts.skipIntent,
         signal: controller.signal,
       })) {
         if (ev.type === "trace") setTraces((t) => [...t, ev.message]);
@@ -151,9 +165,12 @@ export function ChatView() {
           answer += ev.text;
           setStreaming(answer);
         } else if (ev.type === "done") answer = ev.answer;
+        else if (ev.type === "intent") letter = { karar: ev.karar, gerekce: ev.gerekce };
         else if (ev.type === "error") setError(ev.message);
       }
-      if (answer) {
+      if (letter) {
+        setMessages((m) => [...m, { role: "assistant", content: "", letter }]);
+      } else if (answer) {
         setMessages((m) => [...m, { role: "assistant", content: answer, sources }]);
       }
     } catch (err) {
@@ -192,9 +209,27 @@ export function ChatView() {
             </p>
           )}
 
-          {messages.map((m, i) => (
-            <Bubble key={i} message={m} />
-          ))}
+          {messages.map((m, i) =>
+            m.letter ? (
+              <LetterPromptCard
+                key={i}
+                docId={doc.id}
+                suggestedDecision={m.letter.karar}
+                suggestedReason={m.letter.gerekce}
+                defaultRecipient={doc.entities?.kisiKurumlar[0] ?? ""}
+                onDismiss={() => setMessages((list) => list.filter((_, k) => k !== i))}
+                onPlainAnswer={() => {
+                  // Karti ve onu doguran soruyu geri al, ayni soruyu bu kez
+                  // siniflandirmayi atlayarak duz cevap icin yeniden gonder.
+                  const question = messages[i - 1]?.content ?? "";
+                  setMessages((list) => list.slice(0, Math.max(0, i - 1)));
+                  if (question) void send(question, { skipIntent: true });
+                }}
+              />
+            ) : (
+              <Bubble key={i} message={m} />
+            ),
+          )}
 
           {traces.length > 0 && streaming !== null && (
             <div className="space-y-0.5 text-[11px] text-soluk">

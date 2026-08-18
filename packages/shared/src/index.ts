@@ -1,5 +1,6 @@
 export { config, type AppConfig } from "./config.ts";
 export {
+  ChatIntentSchema,
   ChunkSchema,
   CorpusSchema,
   DocClassificationSchema,

@@ -8,6 +8,7 @@ export {
   type ChatTurn,
   type AskStreamOptions,
 } from "./chat.ts";
+export { classifyChatIntent, type ChatIntent } from "./intent.ts";
 export {
   draftResponseLetter,
   verifyLetterNumbers,

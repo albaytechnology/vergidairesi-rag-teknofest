@@ -1,11 +1,12 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { askStream, type ChatEvent } from "@albay/agents";
+import { askStream, classifyChatIntent, type ChatEvent } from "@albay/agents";
 import {
   appendChatExchange,
   getChatHistory,
   getDocumentDetail,
   sessionDocumentIds,
 } from "@albay/ingestion";
+import type { LetterDecision } from "@albay/shared";
 
 interface ChatBody {
   question: string;
@@ -13,19 +14,33 @@ interface ChatBody {
   documentId?: string;
   /** Oturuma ozel yuklenen ek belgeleri de kapsama almak icin. */
   sessionId?: string;
+  /** true ise niyet siniflandirmasi atlanir, mesaj duz soru gibi islenir. */
+  niyetAtla?: boolean;
 }
+
+/**
+ * Telde giden olaylar.
+ *
+ * "intent" askStream'in urettigi bir sey degil, ROTANIN kararidir; bu yuzden
+ * @albay/agents'in ChatEvent sozlesmesine karistirilmiyor.
+ */
+type SseEvent =
+  | ChatEvent
+  | { type: "intent"; karar: LetterDecision | null; gerekce: string | null };
 
 /**
  * SSE chat.
  *
- * Olay tipleri: trace | token | sources | done | error
+ * Olay tipleri: trace | token | sources | done | error | intent
+ * "intent" olayi cevap yazisi talebinde yayinlanir ve akis orada biter — arayuz
+ * duz metin bir cevap yerine yazi olusturma alanini acar.
  * Akis yalnizca BELGE KAPSAMLI sohbette token token gelir; korpus genelinde
  * multi-agent graph calistigi icin ara adimlar trace olarak bildirilir ve
  * cevap tek parca yayinlanir (graph icinde token akisi yok).
  */
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: ChatBody }>("/api/chat", async (req, reply) => {
-    const { question, documentId, sessionId } = req.body ?? {};
+    const { question, documentId, sessionId, niyetAtla } = req.body ?? {};
     if (!question?.trim()) return reply.code(400).send({ error: "question zorunlu" });
 
     if (documentId && !(await getDocumentDetail(documentId))) {
@@ -33,6 +48,23 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }
 
     startSse(reply);
+
+    /*
+     * Niyet once bakilir: calisan resmi bir yazi istiyorsa RAG cevabi uretmenin
+     * anlami yok — arayuz yazi olusturma alanini acacak. Siniflandirici hataya
+     * acik (basarisizlikta "soru" doner), bu yuzden try/catch gerekmiyor.
+     */
+    if (!niyetAtla) {
+      const niyet = await classifyChatIntent(question);
+      if (niyet.tur === "cevap_yazisi") {
+        sendSse(reply, { type: "trace", message: "niyet: cevap yazisi" });
+        sendSse(reply, { type: "intent", karar: niyet.karar, gerekce: niyet.gerekce });
+        // Gecmise YAZILMAZ: kart bir eylem alani, kayda deger bir cevap degil.
+        // Kalici iz, yazi kaydedildiginde response_letters tarafinda olusur.
+        reply.raw.end();
+        return reply;
+      }
+    }
 
     // Cok turlu hafiza: gecmis yalnizca belge bazli sohbette tutulur —
     // korpus genelinde kalici bir "oturum" kavrami yok.
@@ -84,6 +116,6 @@ function startSse(reply: FastifyReply): void {
   reply.raw.flushHeaders?.();
 }
 
-function sendSse(reply: FastifyReply, event: ChatEvent): void {
+function sendSse(reply: FastifyReply, event: SseEvent): void {
   reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
 }
