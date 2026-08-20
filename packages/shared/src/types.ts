@@ -94,7 +94,7 @@ export type ServiceRoutingDecision = z.infer<typeof ServiceRoutingDecisionSchema
  * Faz 3'teki DocClassification kurum korpusu icin genel bir siniflandirmaydi;
  * bu sema evraga ozel: konu/baslik cikarimi, uzun ozet ve yapisal entity'ler.
  * Sayisal kimlikler (VKN/TCKN) LLM'den geldigi gibi kabul edilmez —
- * packages/llm/src/identifiers.ts icindeki checksum dogrulamasindan gecer,
+ * packages/llm/src/identifiers/ icindeki checksum dogrulamasindan gecer,
  * gecemezse null yazilir. Resmi yaziya uydurma vergi numarasi girmesini
  * engelleyen katman budur.
  */

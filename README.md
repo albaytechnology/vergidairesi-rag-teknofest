@@ -329,7 +329,7 @@ sekmesi (`POST /api/upload`) ile sisteme girer;
 worker zinciri **parse → chunk → analiz → servis yönlendirme → embed** adımlarını
 yürütür ve belge ilgili servisin havuzuna düşer. HTTP isteği LLM'i beklemez.
 
-**Belge analizi** (`packages/llm/src/analyzer.ts`) konu, uzun özet, evrak türü ve
+**Belge analizi** (`packages/llm/src/analysis/`) konu, uzun özet, evrak türü ve
 yapısal entity'leri (VKN, TCKN, tarih, tutar, plaka, dönem) çıkarır. Kimlik
 numaraları LLM'den geldiği gibi kabul edilmez: `identifiers.ts` içindeki TCKN/VKN
 checksum'ından geçer, geçmezse ham metinden çapraz kontrol edilir, o da yoksa
@@ -484,7 +484,7 @@ bilgilendirme`), sistem resmî yazışma formatında taslağı üretir; çalış
 önizlemede düzeltir ve PDF/DOCX indirir.
 
 **İş bölümü — modelin yazabileceği tek şey gövde metnidir.** LLM yalnızca ilgi
-satırlarını ve gövde paragraflarını üretir (`packages/agents/src/letter.ts`).
+satırlarını ve gövde paragraflarını üretir (`packages/agents/src/letter/`).
 Sayı, tarih, konu, muhatap, kapanış cümlesi, imza, ek ve dağıtım blokları
 `packages/letter` içinde deterministik olarak kurulur. Blok sırası "Resmî
 Yazışmalarda Uygulanacak Usul ve Esaslar Hakkında Yönetmelik" (2646 sayılı CB

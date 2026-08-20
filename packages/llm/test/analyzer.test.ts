@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groundAlacakTuru } from "../src/analyzer.ts";
+import { groundAlacakTuru } from "../src/analysis/grounding.ts";
 
 const KDV_BELGESI = `Konu: KDV borcumun tecil ve taksitlendirilmesi talebi hk.
 Dairenizin 314871279537 vergi kimlik numaralı mükellefiyim. 2026/01 dönemine ait KDV

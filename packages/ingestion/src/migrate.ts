@@ -1,5 +1,6 @@
 /** Calistir: pnpm migrate */
-import { migrate, pool } from "./db.ts";
+import { pool } from "./db/pool.ts";
+import { migrate } from "./db/migrate.ts";
 
 await migrate();
 console.log("✓ documents tablosu hazir");

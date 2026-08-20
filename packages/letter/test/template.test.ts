@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { LetterBody, LetterModel } from "@albay/shared";
-import { buildLetterModel, type KurumBilgileri } from "../src/model.ts";
-import { renderLetterHtml } from "../src/template.ts";
-import { letterToDocx } from "../src/docx.ts";
+import { buildLetterModel } from "../src/model/build.ts";
+import type { KurumBilgileri } from "../src/model/institution.ts";
+import { renderLetterHtml } from "../src/html/render.ts";
+import { letterToDocx } from "../src/docx/render.ts";
 
 const KURUM: KurumBilgileri = {
   kurumAdi: "Gelir İdaresi Başkanlığı",

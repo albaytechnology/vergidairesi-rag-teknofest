@@ -2,15 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { SearchHit } from "@albay/retrieval";
 import type { ServiceRoutingDecision } from "@albay/shared";
-import {
-  verifyCitations,
-  reconcileBirim,
-  sameService,
-  sameServiceStrict,
-  isEntryPointService,
-  normalizeMaddeNo,
-  uncertainMaddeNumbers,
-} from "../src/routing.ts";
+import { verifyCitations } from "../src/routing/verify-citations.ts";
+import { reconcileBirim } from "../src/routing/reconcile.ts";
+import { sameService, sameServiceStrict, isEntryPointService } from "../src/routing/services.ts";
+import { normalizeMaddeNo, uncertainMaddeNumbers } from "../src/routing/madde.ts";
 
 function hit(metadata: Record<string, unknown>): SearchHit {
   return {

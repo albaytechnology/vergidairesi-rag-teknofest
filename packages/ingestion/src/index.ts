@@ -1,48 +1,77 @@
-export { DoclingClient, type DoclingResult } from "./docling.ts";
+/**
+ * Ingestion katmani — evragin kuruma girisinden arsivlenmesine kadarki kaydi.
+ *
+ * Postgres'in var oldugunu bilen TEK paket burasi; disari yalnizca bu yuzey
+ * acilir, tuketiciler alt yollari import etmez.
+ *
+ *   parse/      docling-serve ile dosyadan Markdown + yapisal JSON
+ *   db/         havuz ve sema (migrations/ altinda faz faz adimlar)
+ *   documents/  evrak satiri: kayit, siniflandirma, analiz, yasam dongusu, arsiv
+ *   chunks/     parcalarin yazilmasi ve embed kuyrugu
+ *   routing/    servis yonlendirmesi: karar, havuzlar, katalog, tutarlilik denetimi
+ *   chat/       belge bazli sohbet gecmisi
+ *   letters/    uretilen cevap yazilari ve giden evrak numarasi
+ *   sessions/   sohbete aticlanan gecici ekler
+ */
+
+// ─── parse ────────────────────────────────────────────────────────────
+export { DoclingClient } from "./parse/docling.ts";
+export type { DoclingResult } from "./parse/types.ts";
+
+// ─── db ───────────────────────────────────────────────────────────────
+export { pool } from "./db/pool.ts";
+export { migrate } from "./db/migrate.ts";
+
+// ─── documents ────────────────────────────────────────────────────────
 export {
-  pool,
-  migrate,
   upsertDocument,
   setStatus,
   setDocumentCorpus,
+  getDocumentDetail,
   statusCounts,
-  replaceChunks,
-  chunkCounts,
-  docsToClassify,
-  saveClassification,
+} from "./documents/store.ts";
+export { docsToClassify, saveClassification, type DocToClassify } from "./documents/classify.ts";
+export { saveDocumentAnalysis, documentAnalysisFromRow } from "./documents/analysis.ts";
+export { setLifecycleStatus, type LifecycleStatus } from "./documents/lifecycle.ts";
+export { listArchiveDocuments, archiveCounts } from "./documents/archive.ts";
+export type { DocStatus, DocumentRow, DocumentDetail } from "./documents/types.ts";
+
+// ─── chunks ───────────────────────────────────────────────────────────
+export { replaceChunks, chunkCounts } from "./chunks/store.ts";
+export {
   chunksToEmbed,
   chunksToEmbedForDoc,
   markEmbedded,
   resetEmbeddings,
-  saveDocumentAnalysis,
-  saveRoutingDecision,
-  routingInconsistencies,
+} from "./chunks/embedding.ts";
+export type { ChunkInsert, ChunkToEmbed } from "./chunks/types.ts";
+
+// ─── routing ──────────────────────────────────────────────────────────
+export { saveRoutingDecision } from "./routing/decisions.ts";
+export {
   serviceQueueCounts,
-  regulationServices,
-  getDocumentDetail,
-  documentAnalysisFromRow,
   listDocumentsByService,
-  listArchiveDocuments,
-  archiveCounts,
-  setLifecycleStatus,
+  type ServiceQueueRow,
+} from "./routing/queues.ts";
+export { regulationServices } from "./routing/catalog.ts";
+export { routingInconsistencies, type RoutingConsistencyRow } from "./routing/audit.ts";
+
+// ─── chat ─────────────────────────────────────────────────────────────
+export {
   appendChatMessage,
   appendChatExchange,
   getChatHistory,
+  type ChatMessageRow,
+} from "./chat/history.ts";
+
+// ─── letters ──────────────────────────────────────────────────────────
+export {
+  nextLetterNo,
   saveResponseLetter,
   listResponseLetters,
   getResponseLetter,
-  nextLetterNo,
-  markSessionUpload,
-  sessionDocumentIds,
-  type ChatMessageRow,
   type ResponseLetterRow,
-  type RoutingConsistencyRow,
-  type ChunkInsert,
-  type ChunkToEmbed,
-  type DocToClassify,
-  type DocumentDetail,
-  type DocumentRow,
-  type DocStatus,
-  type LifecycleStatus,
-  type ServiceQueueRow,
-} from "./db.ts";
+} from "./letters/store.ts";
+
+// ─── sessions ─────────────────────────────────────────────────────────
+export { markSessionUpload, sessionDocumentIds } from "./sessions/uploads.ts";

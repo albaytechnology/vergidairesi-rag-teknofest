@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { LetterBody } from "@albay/shared";
-import { verifyLetterNumbers } from "../src/letter.ts";
+import { verifyLetterNumbers } from "../src/letter/verify-numbers.ts";
 
 const KAYNAK = [
   "2025/3 dönemi KDV borcunun tecili",

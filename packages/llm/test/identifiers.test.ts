@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  isValidTckn,
-  isValidVkn,
-  validateVkn,
-  validateTckn,
-  extractIdentifierCandidates,
-} from "../src/identifiers.ts";
+import { isValidTckn, isValidVkn } from "../src/identifiers/checksum.ts";
+import { validateTckn, validateVkn } from "../src/identifiers/validate.ts";
+import { extractIdentifierCandidates } from "../src/identifiers/extract.ts";
 
 // NVI/GIB'in kamuya acik test numaralari
 const GECERLI_TCKN = "10000000146";
