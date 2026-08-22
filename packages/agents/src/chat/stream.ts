@@ -15,7 +15,9 @@ import { buildContext, uniqueSources } from "../common/context.ts";
 import { ollama } from "../common/ollama.ts";
 import { ask } from "../graph/build.ts";
 import { DOCUMENT_CHAT_PROMPT } from "./prompts.ts";
-import { searchInDocuments } from "./retrieve.ts";
+import { formatDocumentRecord, isRoutingQuestion } from "./record.ts";
+import { searchInDocuments, searchRegulations } from "./retrieve.ts";
+import type { SearchHit } from "@albay/retrieval";
 import type { AskStreamOptions, ChatEvent, ChatTurn } from "./types.ts";
 
 const MAX_HISTORY = 8;
@@ -48,7 +50,22 @@ export async function* askStream(
 
     yield { type: "trace", message: `retrieve → ${hits.length} parca (belge kapsamli)` };
 
-    if (!hits.length) {
+    /*
+     * Yonlendirme sorusu, cevabi belgenin metninde OLMAYAN bir sorudur: karari
+     * daire verdi, gerekcesi sistem kaydinda, dayanagi yonetmelikte. Bu yuzden
+     * boyle bir soruda yonetmelik parcalari da baglama girer.
+     */
+    const mevzuat =
+      opts.record && isRoutingQuestion(question)
+        ? await searchRegulations(question, opts.record.routing.servis, opts.record.routing.maddeler)
+        : [];
+    if (mevzuat.length) {
+      yield { type: "trace", message: `retrieve → ${mevzuat.length} yonetmelik parcasi` };
+    }
+
+    // Belgeden parca gelmemesi artik cevapsizlik demek degil: sistem kaydi
+    // (ozet, cikarilan bilgiler, yonlendirme karari) tek basina da cevaplar.
+    if (!hits.length && !opts.record) {
       const cevap = "Bu bilgi belgede bulunamadi.";
       yield { type: "token", text: cevap };
       yield { type: "done", answer: cevap };
@@ -57,17 +74,14 @@ export async function* askStream(
 
     yield {
       type: "sources",
-      sources: uniqueSources(hits),
-      hits: hits.map((h) => ({ filename: h.filename, page: h.page })),
+      sources: [...uniqueSources(hits), ...uniqueSources(mevzuat)],
+      hits: [...hits, ...mevzuat].map((h) => ({ filename: h.filename, page: h.page })),
     };
 
     const messages = [
       { role: "system" as const, content: DOCUMENT_CHAT_PROMPT },
       ...gecmisiKirp(opts.history ?? []),
-      {
-        role: "user" as const,
-        content: `Soru: ${question}\n\nBelge parcalari:\n${buildContext(hits)}`,
-      },
+      { role: "user" as const, content: kullaniciMesaji(question, hits, mevzuat, opts) },
     ];
 
     let cevap = "";
@@ -96,6 +110,38 @@ export async function askDocument(
     else if (ev.type === "error") throw new Error(ev.message);
   }
   return { answer, sources, trace };
+}
+
+/**
+ * Baglami tek mesajda birlestirir.
+ *
+ * Uc kaynak AYRI bloklar halinde verilir — evrakin metni, dairenin kendi
+ * kaydi, yonetmelik metni. Tek yigina karistirilsalardi cevapta hangisine
+ * dayanildigi kaybolurdu; calisan resmi islem yapacagi icin "bunu evrak mi
+ * soyluyor, sistem mi cikardi" ayrimi cevabin kendisi kadar onemli.
+ */
+function kullaniciMesaji(
+  question: string,
+  hits: SearchHit[],
+  mevzuat: SearchHit[],
+  opts: AskStreamOptions,
+): string {
+  const bloklar = [`Soru: ${question}`];
+
+  if (opts.record) {
+    bloklar.push(`SISTEM KAYDI (dairenin bu evrak icin urettigi kayit):\n${formatDocumentRecord(opts.record)}`);
+  }
+  if (hits.length) {
+    bloklar.push(`BELGE PARCALARI:\n${buildContext(hits)}`);
+  }
+  if (mevzuat.length) {
+    bloklar.push(
+      `YONETMELIK PARCALARI:\n${mevzuat
+        .map((h) => `--- M.${String(h.metadata?.maddeNo ?? "?")} (${h.filename}) ---\n${h.text}`)
+        .join("\n\n")}`,
+    );
+  }
+  return bloklar.join("\n\n");
 }
 
 /** Son N turu al — baglam penceresini gecmisle doldurmamak icin. */

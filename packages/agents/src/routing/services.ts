@@ -50,3 +50,17 @@ export function isServiceForOrgType(maddeNo: string, orgType: string): boolean {
   const no = normalizeMaddeNo(maddeNo);
   return orgType === "bagli" ? no === "12" : no !== "12";
 }
+
+/**
+ * Ihtilafli Isler Servisi mi? (M.11-A-I-4)
+ *
+ * Bu servisin cevap yazisi diger servislerinkinden yapisal olarak farklidir:
+ * evrak bir dava dilekcesidir ve yazi mukellefe degil MAHKEMEYE gider. Muhatap
+ * bir kurumdur, uslup kurumsaldir, mukellef "davaci" olarak ucuncu sahis anilir.
+ * Bu yuzden servis adi bir kez burada tanimlanip hem yazi uretimi hem arayuz
+ * tarafindan kullaniliyor — iki yerde ayri ayri "ihtilafli" aramak, birinin
+ * gunun birinde digerinden sapmasi demekti.
+ */
+export function isDisputeService(servis: string | null | undefined): boolean {
+  return !!servis && /ihtilafli isler/.test(trNormalize(servis));
+}

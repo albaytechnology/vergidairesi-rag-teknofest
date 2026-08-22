@@ -17,7 +17,7 @@ export {
   kurumBilgileriFromConfig,
   type KurumBilgileri,
 } from "./model/institution.ts";
-export { YER_TUTUCU } from "./model/fields.ts";
+export { YER_TUTUCU, type LetterAddressee } from "./model/fields.ts";
 
 export { renderLetterHtml, type RenderOptions } from "./html/render.ts";
 export { letterToDocx } from "./docx/render.ts";

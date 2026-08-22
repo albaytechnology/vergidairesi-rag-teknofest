@@ -50,6 +50,8 @@ export interface DocumentSummary {
   docType: string | null;
   entities: Entities | null;
   containsPII: boolean | null;
+  /** Eksik bilgi taramasinin bulgulari. null: evrak hic taranmadi. */
+  eksikler: DocumentGap[] | null;
   routing: {
     birim: string | null;
     servis: string | null;
@@ -57,10 +59,21 @@ export interface DocumentSummary {
     gerekce: string | null;
     maddeler: MaddeRef[];
     durum: string;
+    /** true: cevap yazısı mükellefe değil Vergi Mahkemesi Başkanlığı'na yazılır. */
+    mahkemeYazismasi: boolean;
   };
   yasamDongusu: LifecycleStatus;
   tamamlanmaTarihi: string | null;
   createdAt: string;
+}
+
+/** Belgede eksik ya da kendi icinde celiskili bilgi. kanit: belgeden birebir alinti (yoksa ""). */
+export interface DocumentGap {
+  tur: "eksik" | "tutarsizlik";
+  baslik: string;
+  aciklama: string;
+  onem: "kritik" | "orta" | "dusuk";
+  kanit: string;
 }
 
 export interface ArchiveResponse {
@@ -75,6 +88,11 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sources: string[];
+  /**
+   * Dolu ise bu asistan mesaji bir METIN degil, "cevap yazısı oluştur" KARTIDIR;
+   * geçmiş yeniden kurulurken kart bu alandan tanınır.
+   */
+  letter_intent: { karar: LetterDecision | null; gerekce: string | null } | null;
   created_at: string;
 }
 

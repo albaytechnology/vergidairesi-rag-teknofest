@@ -85,7 +85,7 @@ Arayüz bu akışı birebir izler:
    (sürükle-bırak da olur). Toplu klasör ingest'i için: `pnpm ingest <klasör>`
 2. Belge Yazışma ve Arşiv kaydına girer ve **Cevap Yazısı Yazılmayan Dilekçeler**
    listesine düşer. Arka planda hat çalışır:
-   **parse → chunk → analiz → servis yönlendirme → embed**
+   **parse → chunk → analiz → servis yönlendirme → eksik bilgi taraması → embed**
 3. Belgeyi açıp sohbet edin, kararı verip cevap yazısını üretin
 4. PDF indirildiği anda evrak **Cevap Yazısı Yazılan** tarafına geçer
 
@@ -115,6 +115,13 @@ yalnızca o sohbette kaynak olur, servis havuzuna girmez.
 bilgilendirme) ve gerekçesini girin, taslağı üretin. Önizlemede konu, ilgi ve gövde
 bloklarını doğrudan düzenleyebilirsiniz; PDF veya DOCX olarak indirin.
 
+**İhtilaflı İşler Servisi bir istisnadır:** oraya yönlendirilen evrak bir dava
+dilekçesidir, dolayısıyla cevap mükellefe değil **Vergi Mahkemesi Başkanlığı’na**
+yazılır. Bu evrakta muhatap türü seçilmez; yazı kurumsal üslupla hazırlanır
+(mükellef metinde “davacı” olarak anılır, mahkemeye “Mahkemeniz” diye hitap edilir,
+kapanış “arz ederim” olur). Mahkemenin adı evraktan okunamazsa uydurulmaz —
+görünür bir yer tutucu basılır ve eksik alan olarak raporlanır.
+
 ## Geliştirme
 
 ```bash
@@ -140,9 +147,21 @@ pnpm qdrant:sync -- --fix                 # Postgres'te karşılığı olmayan v
 pnpm worker &                             # hat çalışsın
 pnpm pipeline -- --corpus regulations     # yönetmeliği yeniden indeksle (yönlendirmenin dayanağı)
 pnpm pipeline -- --force                  # tüm evrakı yeniden chunk/analiz/yönlendir/embed
+pnpm gaps                                 # hat öncesi evrakta eksik bilgi taraması (-- --force: hepsi)
 pnpm qdrant:sync                          # öksüz point: 0 olmalı
 pnpm routing:audit                        # tutarsızlık: yok olmalı
 ```
+
+Korpusu **sıfırdan** kurmak gerekirse (geri dönüşü yoktur — Postgres kayıtları ve
+Qdrant vektörleri silinir, `data/uploads` altındaki dosyalar durur):
+
+```bash
+pnpm reset                                # rapor: ne silinecek (hiçbir şey silinmez)
+pnpm reset -- --yes                       # her şeyi sil
+pnpm reset -- --corpus documents --yes    # yalnızca evrak; yönetmelik indeksi kalır
+```
+
+Silme worker kapalıyken yapılmalı: kuyrukta bekleyen işler silinen kayıtları geri getirir.
 
 Yeniden işleme **güvenlidir**: analiz sıcaklığı 0 olduğu için aynı belge aynı
 kararı üretir, yaşam döngüsü durumu yalnızca ileri gittiği için "cevap yazıldı"
@@ -326,7 +345,8 @@ flowchart TD
 
 Dışarıdan gelen evrak `pnpm ingest` (klasör) ya da arayüzdeki **Evrak Ekle**
 sekmesi (`POST /api/upload`) ile sisteme girer;
-worker zinciri **parse → chunk → analiz → servis yönlendirme → embed** adımlarını
+worker zinciri **parse → chunk → analiz → servis yönlendirme → eksik bilgi taraması → embed**
+adımlarını
 yürütür ve belge ilgili servisin havuzuna düşer. HTTP isteği LLM'i beklemez.
 
 **Belge analizi** (`packages/llm/src/analysis/`) konu, uzun özet, evrak türü ve
@@ -334,6 +354,13 @@ yapısal entity'leri (VKN, TCKN, tarih, tutar, plaka, dönem) çıkarır. Kimlik
 numaraları LLM'den geldiği gibi kabul edilmez: `identifiers.ts` içindeki TCKN/VKN
 checksum'ından geçer, geçmezse ham metinden çapraz kontrol edilir, o da yoksa
 `null` yazılır — resmî yazıya uydurma vergi numarası giremez.
+
+**Eksik bilgi taraması** (`packages/llm/src/analysis/gaps.ts`) analizin tersini
+yapar: evrakta ne yazdığını değil, ne yazmadığını ve neresinin kendisiyle
+çeliştiğini arar (eksik VKN, iki yerde farklı yazılmış tutar, tebligat tarihiyle
+uyuşmayan başvuru). Her bulgu belgeden birebir bir alıntıya bağlanır; alıntısı
+belgede doğrulanamayan bulgu düşürülür. Sonuç belgeyle birlikte saklanır
+(`gap_findings`), detay paneli ve sohbet aynı listeyi okur.
 
 ### API uçları
 

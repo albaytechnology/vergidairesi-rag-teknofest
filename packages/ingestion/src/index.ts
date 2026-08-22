@@ -32,6 +32,7 @@ export {
 } from "./documents/store.ts";
 export { docsToClassify, saveClassification, type DocToClassify } from "./documents/classify.ts";
 export { saveDocumentAnalysis, documentAnalysisFromRow } from "./documents/analysis.ts";
+export { saveDocumentGaps, docsToScanGaps, type DocToScanGaps } from "./documents/gaps.ts";
 export { setLifecycleStatus, type LifecycleStatus } from "./documents/lifecycle.ts";
 export { listArchiveDocuments, archiveCounts } from "./documents/archive.ts";
 export type { DocStatus, DocumentRow, DocumentDetail } from "./documents/types.ts";
@@ -53,7 +54,7 @@ export {
   listDocumentsByService,
   type ServiceQueueRow,
 } from "./routing/queues.ts";
-export { regulationServices } from "./routing/catalog.ts";
+export { regulationServices, isRegulationService } from "./routing/catalog.ts";
 export { routingInconsistencies, type RoutingConsistencyRow } from "./routing/audit.ts";
 
 // ─── chat ─────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export {
   appendChatExchange,
   getChatHistory,
   type ChatMessageRow,
+  type ChatLetterIntent,
 } from "./chat/history.ts";
 
 // ─── letters ──────────────────────────────────────────────────────────

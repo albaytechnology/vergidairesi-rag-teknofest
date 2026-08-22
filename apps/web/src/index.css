@@ -87,6 +87,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Tiklanabilir olanin isaretcisi.
+ *
+ * Tailwind v4 preflight'i dugmelerin cursor'unu "default"a cekiyor — arayuzdeki
+ * her dugme ok imleciyle duruyordu. Kural tek yerde: her dugmeye ayri ayri
+ * cursor-pointer sinifi eklemek, bir sonraki dugmede unutulacak bir aliskanlik.
+ */
+button:not(:disabled),
+select,
+summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

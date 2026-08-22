@@ -11,7 +11,7 @@
 import { LetterBodySchema, type LetterBody, type LetterDecision } from "@albay/shared";
 import { ollama } from "../common/ollama.ts";
 import { normalizeBody } from "./normalize.ts";
-import { RESPONSE_LETTER_PROMPT, RESPONSE_LETTER_SCHEMA } from "./prompt.ts";
+import { responseLetterPrompt, RESPONSE_LETTER_SCHEMA } from "./prompt.ts";
 import type { LetterDraftInput, LetterDraftResult } from "./types.ts";
 import { duzeltmeTalimati, kullaniciPromptu } from "./user-prompt.ts";
 import { kaynakMetni, verifyLetterNumbers } from "./verify-numbers.ts";
@@ -46,7 +46,7 @@ export async function draftResponseLetter(input: LetterDraftInput): Promise<Lett
     try {
       const raw = await ollama.chat(
         [
-          { role: "system", content: RESPONSE_LETTER_PROMPT },
+          { role: "system", content: responseLetterPrompt(input.hitap) },
           { role: "user", content: userPrompt },
         ],
         // Sicaklik 0.2: resmi yazi dilinin akiciligi icin biraz alan birakiliyor;

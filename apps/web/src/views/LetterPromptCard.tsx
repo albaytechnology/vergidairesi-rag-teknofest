@@ -11,6 +11,8 @@ interface Props {
   suggestedReason: string | null;
   /** Evraktan bilinen muhatap adi (varsa). */
   defaultRecipient: string;
+  /** Evrak Ihtilafli Isler Servisi'nde: yazi mahkemeye gider, muhatap secilmez. */
+  courtLetter: boolean;
   /** Kullanici aslinda duz bir cevap istiyormus — ayni soruyu RAG'a gonder. */
   onPlainAnswer: () => void;
   onDismiss: () => void;
@@ -30,6 +32,7 @@ export function LetterPromptCard({
   suggestedDecision,
   suggestedReason,
   defaultRecipient,
+  courtLetter,
   onPlainAnswer,
   onDismiss,
 }: Props) {
@@ -37,7 +40,9 @@ export function LetterPromptCard({
   const [decision, setDecision] = useState<LetterDecision>(suggestedDecision ?? "onay");
   const [reason, setReason] = useState(suggestedReason ?? "");
   const [recipientName, setRecipientName] = useState(defaultRecipient);
-  const [recipientType, setRecipientType] = useState<"kisi" | "kurum">("kisi");
+  const [recipientType, setRecipientType] = useState<"kisi" | "kurum">(
+    courtLetter ? "kurum" : "kisi",
+  );
 
   const isNegative = isNegativeDecision(decision);
   const reasonMissing = isNegative && !reason.trim();
@@ -116,26 +121,35 @@ export function LetterPromptCard({
             <input
               value={recipientName}
               onChange={(e) => setRecipientName(e.target.value)}
-              placeholder="Ad Soyad / Kurum"
+              placeholder={courtLetter ? "… Vergi Mahkemesi Başkanlığı" : "Ad Soyad / Kurum"}
               className="min-w-[180px] flex-1 rounded-[10px] border border-cizgi-2 px-3 py-2 text-[13px] outline-none"
             />
-            <div className="flex flex-[0_0_auto] gap-1.5">
-              {(["kisi", "kurum"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setRecipientType(t)}
-                  className={`rounded-[9px] border px-3 py-2 text-[12.5px] font-semibold transition-colors ${
-                    recipientType === t
-                      ? "border-metin bg-metin text-white"
-                      : "border-cizgi-2 bg-white text-govde hover:border-cizgi-5"
-                  }`}
-                >
-                  {t === "kisi" ? "Kişi" : "Kurum"}
-                </button>
-              ))}
-            </div>
+            {/* Mahkeme yazismasinda kisi/kurum secimi yok: muhatap kurumdur. */}
+            {!courtLetter && (
+              <div className="flex flex-[0_0_auto] gap-1.5">
+                {(["kisi", "kurum"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setRecipientType(t)}
+                    className={`rounded-[9px] border px-3 py-2 text-[12.5px] font-semibold transition-colors ${
+                      recipientType === t
+                        ? "border-metin bg-metin text-white"
+                        : "border-cizgi-2 bg-white text-govde hover:border-cizgi-5"
+                    }`}
+                  >
+                    {t === "kisi" ? "Kişi" : "Kurum"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+          {courtLetter && (
+            <p className="-mt-2 mb-4 text-[11.5px] leading-[1.55] text-silik">
+              İhtilaflı İşler Servisi: yazı Vergi Mahkemesi Başkanlığı’na hitaben,
+              kurumsal üslupla hazırlanır.
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             <button

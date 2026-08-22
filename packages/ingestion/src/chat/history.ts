@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
+import type { LetterDecision } from "@albay/shared";
 import { pool } from "../db/pool.ts";
+
+/**
+ * Asistan mesajinin bir cevap yazisi KARTI oldugunu ve kartin hangi oneriyle
+ * acildigini gosterir. Duz metin cevaplarda null.
+ */
+export interface ChatLetterIntent {
+  karar: LetterDecision | null;
+  gerekce: string | null;
+}
 
 export interface ChatMessageRow {
   id: string;
@@ -7,6 +17,7 @@ export interface ChatMessageRow {
   role: "user" | "assistant";
   content: string;
   sources: string[];
+  letter_intent: ChatLetterIntent | null;
   created_at: string;
 }
 
@@ -35,6 +46,8 @@ export async function appendChatExchange(exchange: {
   question: string;
   answer: string;
   sources?: string[];
+  /** Verilirse asistan mesaji duz metin degil, cevap yazisi karti olarak kaydedilir. */
+  letterIntent?: ChatLetterIntent;
 }): Promise<void> {
   const client = await pool.connect();
   try {
@@ -45,13 +58,14 @@ export async function appendChatExchange(exchange: {
       [randomUUID(), exchange.documentId, exchange.question],
     );
     await client.query(
-      `INSERT INTO chat_messages (id, document_id, role, content, sources)
-       VALUES ($1, $2, 'assistant', $3, $4)`,
+      `INSERT INTO chat_messages (id, document_id, role, content, sources, letter_intent)
+       VALUES ($1, $2, 'assistant', $3, $4, $5)`,
       [
         randomUUID(),
         exchange.documentId,
         exchange.answer,
         JSON.stringify(exchange.sources ?? []),
+        exchange.letterIntent ? JSON.stringify(exchange.letterIntent) : null,
       ],
     );
     await client.query("COMMIT");

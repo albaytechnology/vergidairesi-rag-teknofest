@@ -60,3 +60,25 @@ export const ANALYSIS_JSON_SCHEMA: Record<string, unknown> = {
     "confidence",
   ],
 };
+
+/** Eksik bilgi / tutarsizlik taramasi (DocumentGapReportSchema ile ayni sekil). */
+export const GAPS_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    bulgular: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          tur: { type: "string", enum: ["eksik", "tutarsizlik"] },
+          baslik: { type: "string" },
+          aciklama: { type: "string" },
+          onem: { type: "string", enum: ["kritik", "orta", "dusuk"] },
+          kanit: { type: "string" },
+        },
+        required: ["tur", "baslik", "aciklama", "onem", "kanit"],
+      },
+    },
+  },
+  required: ["bulgular"],
+};

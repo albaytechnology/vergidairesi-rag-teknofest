@@ -133,6 +133,56 @@ test("kapanis cumlesi karardan ve muhatap turunden turetilir", () => {
   assert.match(kur({ karar: "eksik_belge" }).kapanis, /Eksik belge/);
 });
 
+/*
+ * Ihtilafli Isler Servisi yazismasi: muhatap mukellef degil MAHKEMEDIR.
+ * Buradaki testler yazinin ust bloklarini korur — govdenin uslubu modele ait
+ * ve prompt tarafinda kurallanir, ama muhatap/kapanis deterministik olmali.
+ */
+test("mahkeme hitabinda muhatap evraktaki mahkemedir, davaci degil", () => {
+  const model = buildLetterModel({
+    analiz: {
+      ...analiz,
+      entities: {
+        ...analiz.entities,
+        kisiKurumlar: ["Reyhan MÜNYAS", "İzmir Vergi Mahkemesi"],
+      },
+    },
+    body,
+    karar: "bilgilendirme",
+    kurum: KURUM,
+    hitap: "mahkeme",
+  });
+  assert.equal(model.muhatap.ad, "İzmir Vergi Mahkemesi Başkanlığı");
+  assert.equal(model.muhatap.tur, "kurum");
+  // Mukellefin vergi numarasi muhatap blogunda yer almaz: o numara davaciya ait.
+  assert.equal(model.muhatap.vknTckn, null);
+  assert.match(model.kapanis, /arz ederim\.$/);
+});
+
+test("mahkeme evrakta gecmiyorsa muhatap uydurulmaz", () => {
+  const model = buildLetterModel({
+    analiz: { ...analiz, entities: { ...analiz.entities, kisiKurumlar: ["Reyhan MÜNYAS"] } },
+    body,
+    karar: "bilgilendirme",
+    kurum: KURUM,
+    hitap: "mahkeme",
+  });
+  assert.equal(model.muhatap.ad, "[VERGİ MAHKEMESİ BAŞKANLIĞI]");
+  assert.ok(model.eksikAlanlar.includes("Vergi mahkemesi adı (evrakta bulunamadı)"));
+});
+
+test("mahkeme adi zaten baskanlik iceriyorsa tekrarlanmaz", () => {
+  const model = buildLetterModel({
+    analiz,
+    body,
+    karar: "red",
+    kurum: KURUM,
+    hitap: "mahkeme",
+    muhatap: { ad: "İstanbul 2. Vergi Mahkemesi Başkanlığı" },
+  });
+  assert.equal(model.muhatap.ad, "İstanbul 2. Vergi Mahkemesi Başkanlığı");
+});
+
 test("taslak damgasi ve imzasizlik uyarisi varsayilan olarak basilir", () => {
   const html = renderLetterHtml(kur());
   assert.match(html, /class="filigran"/);

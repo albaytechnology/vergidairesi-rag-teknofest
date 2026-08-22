@@ -15,7 +15,7 @@ import {
   saveResponseLetter,
   setLifecycleStatus,
 } from "@albay/ingestion";
-import { draftResponseLetter } from "@albay/agents";
+import { draftResponseLetter, isDisputeService } from "@albay/agents";
 import { buildLetterModel, htmlToPdf, letterToDocx, renderLetterHtml } from "@albay/letter";
 import { LetterDecisionSchema, LetterModelSchema } from "@albay/shared";
 
@@ -83,11 +83,22 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
     }
 
     const analiz = documentAnalysisFromRow(doc);
+
+    /*
+     * Ihtilafli Isler Servisi'ne yonlendirilen evrak bir dava dosyasidir: cevap
+     * mukellefe degil Vergi Mahkemesi Baskanligi'na gider. Hitap SERVISTEN
+     * turetiliyor, arayuzdeki secime birakilmiyor — bu bir tercih degil, evrakin
+     * turunun sonucu; calisanin muhatap alanini "kisi" birakmasi yaziyi
+     * mahkemeye kisiye yazilmis gibi cikartmamali.
+     */
+    const hitap = isDisputeService(doc.routed_service) ? "mahkeme" : "mukellef";
+
     const taslak = await draftResponseLetter({
       analiz,
       karar: istek.karar,
       kararGerekcesi: istek.gerekce,
       maddeler: doc.routing_regulation_refs ?? [],
+      hitap,
     });
 
     // Sira numarasi yalnizca kaydederken tuketilir; onizleme yer tutucu gosterir.
@@ -98,6 +109,7 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
       karar: istek.karar,
       sayiNo,
       muhatap: istek.muhatap,
+      hitap,
       ekler: istek.ekler,
       dagitim: istek.dagitim,
     });

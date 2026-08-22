@@ -20,7 +20,12 @@ export function ServicesView() {
   });
 
   const services = data?.services ?? [];
-  const pending = services.reduce((t, s) => t + s.bekleyen, 0);
+  // Ust satirdaki sayi KARTLARIN TOPLAMI DEGIL, bekleyen tum evraktir:
+  // yonlendirilemeyenlerin bir karti yok ve disarida birakildiklarinda ekran,
+  // sol seritte duran bir evraki hic saymamis oluyordu. Kartlar + belirlenemedi
+  // = bekleyen evrak; iki tarafin ayrisabilecegi bir aralik kalmasin.
+  const pending =
+    services.reduce((t, s) => t + s.bekleyen, 0) + (data?.belirlenemedi ?? 0);
   const completed = services.reduce((t, s) => t + s.tamamlanan, 0);
 
   return (

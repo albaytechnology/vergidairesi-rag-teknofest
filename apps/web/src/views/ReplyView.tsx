@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, download } from "../api/client.ts";
 import { SectionLabel, WarningBox } from "../components/ui.tsx";
 import { useDocumentContext } from "../shell/DocumentLayout.tsx";
+import { defaultRecipient } from "./recipient.ts";
 import {
   DECISIONS,
   decisionLabel,
@@ -32,11 +33,19 @@ export function ReplyView() {
   const handoff = (useLocation().state ?? null) as ReplyHandoff | null;
   const [decision, setDecision] = useState<LetterDecision>(handoff?.karar ?? "onay");
   const [reason, setReason] = useState(handoff?.gerekce ?? "");
+  /*
+   * Ihtilafli Isler Servisi'nde muhatap SECILMEZ: evrak bir dava dilekcesidir,
+   * cevap Vergi Mahkemesi Baskanligi'na gider. Alan yine de gorunur ve
+   * duzenlenebilir kalir — mahkemenin adi evraktan okunamamis olabilir — ama
+   * kisi/kurum secimi kapalidir ve bos birakilirsa sunucu evraktaki mahkemeyi
+   * kendisi yazar.
+   */
+  const courtLetter = doc.routing.mahkemeYazismasi;
   const [recipientName, setRecipientName] = useState(
-    handoff?.muhatapAd || (doc.entities?.kisiKurumlar[0] ?? ""),
+    handoff?.muhatapAd || defaultRecipient(doc, courtLetter),
   );
   const [recipientType, setRecipientType] = useState<"kisi" | "kurum">(
-    handoff?.muhatapTur ?? "kisi",
+    courtLetter ? "kurum" : (handoff?.muhatapTur ?? "kisi"),
   );
   const [model, setModel] = useState<LetterModel | null>(null);
   const [html, setHtml] = useState<string | null>(null);
@@ -61,7 +70,10 @@ export function ReplyView() {
         docId,
         karar: decision,
         gerekce: reason.trim() || undefined,
-        muhatap: { ad: recipientName.trim() || undefined, tur: recipientType },
+        muhatap: {
+          ad: recipientName.trim() || undefined,
+          tur: courtLetter ? "kurum" : recipientType,
+        },
         kaydet: persist,
       }),
     onSuccess: (result, persist) => {
@@ -196,29 +208,39 @@ export function ReplyView() {
         <input
           value={recipientName}
           onChange={(e) => setRecipientName(e.target.value)}
-          placeholder="Ad Soyad / Kurum"
+          placeholder={courtLetter ? "… Vergi Mahkemesi Başkanlığı" : "Ad Soyad / Kurum"}
           className="mt-2.5 mb-2.5 w-full rounded-[10px] border border-cizgi-2 px-3 py-2.5 text-[13px] outline-none"
         />
-        <div className="mb-6 flex gap-2">
-          {(["kisi", "kurum"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setRecipientType(t)}
-              className={`flex-1 rounded-[9px] border p-2 text-[12.5px] font-semibold transition-colors ${
-                recipientType === t
-                  ? "border-metin bg-metin text-white"
-                  : "border-cizgi-2 bg-white text-govde"
-              }`}
-            >
-              {t === "kisi" ? "Kişi" : "Kurum"}
-            </button>
-          ))}
-        </div>
-        {(doc.entities?.vkn || doc.entities?.tckn) && (
-          <p className="-mt-4 mb-6 text-[11.5px] text-silik">
-            Doğrulanmış numara yazıya eklenecek: {doc.entities.vkn ?? doc.entities.tckn}
-          </p>
+        {courtLetter ? (
+          <div className="mb-6 rounded-[10px] border border-gib-cizgi bg-gib-sis px-3 py-2.5 text-[11.5px] leading-[1.55] text-govde">
+            Evrak <strong>İhtilaflı İşler Servisi</strong>’ne yönlendirildi: yazı Vergi
+            Mahkemesi Başkanlığı’na hitaben, kurumsal üslupla hazırlanır. Mükellef metinde
+            “davacı” olarak anılır.
+          </div>
+        ) : (
+          <>
+            <div className="mb-6 flex gap-2">
+              {(["kisi", "kurum"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setRecipientType(t)}
+                  className={`flex-1 rounded-[9px] border p-2 text-[12.5px] font-semibold transition-colors ${
+                    recipientType === t
+                      ? "border-metin bg-metin text-white"
+                      : "border-cizgi-2 bg-white text-govde"
+                  }`}
+                >
+                  {t === "kisi" ? "Kişi" : "Kurum"}
+                </button>
+              ))}
+            </div>
+            {(doc.entities?.vkn || doc.entities?.tckn) && (
+              <p className="-mt-4 mb-6 text-[11.5px] text-silik">
+                Doğrulanmış numara yazıya eklenecek: {doc.entities.vkn ?? doc.entities.tckn}
+              </p>
+            )}
+          </>
         )}
 
         <button

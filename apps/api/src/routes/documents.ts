@@ -7,10 +7,11 @@ import {
   archiveCounts,
   setLifecycleStatus,
   saveRoutingDecision,
+  isRegulationService,
   getChatHistory,
   pool,
 } from "@albay/ingestion";
-import { routeDocument, formatRoutingDecision } from "@albay/agents";
+import { routeDocument, formatRoutingDecision, isDisputeService } from "@albay/agents";
 
 /** Havuz listesi ve belge detayi. */
 export async function registerDocumentRoutes(app: FastifyInstance): Promise<void> {
@@ -163,6 +164,14 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
       if (!doc) return reply.code(404).send({ error: "Belge bulunamadi" });
 
       if (req.body?.servis) {
+        // Elle atama da katalogla sinirli: arayuzdeki liste zaten katalogdan
+        // geliyor, ama bu uc raw SQL ile yaziyor ve katalog disi bir ad evraki
+        // hicbir havuzda gorunmez hale getirirdi (bkz. saveRoutingDecision).
+        if (!(await isRegulationService(req.body.servis))) {
+          return reply
+            .code(400)
+            .send({ error: `Yonetmelik katalogunda boyle bir servis yok: ${req.body.servis}` });
+        }
         await pool.query(
           `UPDATE documents SET routed_service = $2, routing_reasoning = $3,
              routing_confidence = 1, routing_status = 'routed', routed_at = now(),
@@ -203,6 +212,8 @@ function toSummary(d: NonNullable<Detay>) {
     docType: d.doc_type,
     entities: d.extracted_entities,
     containsPII: d.contains_pii,
+    /** null: evrak hic taranmadi (hat oncesi kayit). Bos dizi: tarandi, bulgu cikmadi. */
+    eksikler: d.gap_findings,
     routing: {
       birim: d.routed_birim,
       servis: d.routed_service,
@@ -210,6 +221,14 @@ function toSummary(d: NonNullable<Detay>) {
       gerekce: d.routing_reasoning,
       maddeler: d.routing_regulation_refs ?? [],
       durum: d.routing_status,
+      /**
+       * Cevap yazisi mukellefe mi mahkemeye mi gidiyor.
+       *
+       * Kural sunucuda (isDisputeService) duruyor ve arayuz sonucu okuyor;
+       * servis adini iki yerde ayri ayri eslestirmek, birinin gunun birinde
+       * digerinden sapmasi demekti.
+       */
+      mahkemeYazismasi: isDisputeService(d.routed_service),
     },
     /** Is akisi durumu — parse durumundan (status) ayridir. */
     yasamDongusu: d.lifecycle_status,

@@ -20,7 +20,14 @@ import type {
   LetterRecipient,
 } from "@albay/shared";
 import { kurumBilgileriFromConfig, type KurumBilgileri } from "./institution.ts";
-import { YER_TUTUCU, kapanisCumlesi, konuSatiri, muhatabiKur, trTarih } from "./fields.ts";
+import {
+  YER_TUTUCU,
+  kapanisCumlesi,
+  konuSatiri,
+  muhatabiKur,
+  trTarih,
+  type LetterAddressee,
+} from "./fields.ts";
 
 export interface BuildLetterInput {
   analiz: Pick<DocumentAnalysis, "konu" | "baslikOnerisi" | "entities">;
@@ -38,6 +45,11 @@ export interface BuildLetterInput {
   taslak?: boolean;
   /** Verilmezse ortam degiskenlerinden okunur. */
   kurum?: KurumBilgileri;
+  /**
+   * Yazi kime hitaben yaziliyor. "mahkeme" verildiginde muhatap Vergi Mahkemesi
+   * Baskanligi olur ve kapanis cumlesi degisir (bkz. isDisputeService).
+   */
+  hitap?: LetterAddressee;
 }
 
 export function buildLetterModel(input: BuildLetterInput): LetterModel {
@@ -68,7 +80,7 @@ export function buildLetterModel(input: BuildLetterInput): LetterModel {
       ? YER_TUTUCU("SIRA NO")
       : String(input.sayiNo);
 
-  const muhatap = muhatabiKur(input.muhatap, input.analiz.entities, eksikAlanlar);
+  const muhatap = muhatabiKur(input.muhatap, input.analiz.entities, eksikAlanlar, input.hitap);
 
   return {
     taslak: input.taslak ?? true,
@@ -81,7 +93,7 @@ export function buildLetterModel(input: BuildLetterInput): LetterModel {
     muhatap,
     ilgiSatirlari: input.body.ilgiSatirlari,
     paragraflar: input.body.paragraflar,
-    kapanis: kapanisCumlesi(input.karar, muhatap.tur),
+    kapanis: kapanisCumlesi(input.karar, muhatap.tur, input.hitap),
     imzaAd,
     imzaUnvan,
     ekler: input.ekler ?? [],

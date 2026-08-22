@@ -3,7 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import { streamChat } from "../api/sse.ts";
 import { useDocumentContext } from "../shell/DocumentLayout.tsx";
+import { Markdown } from "../components/Markdown.tsx";
 import { LetterPromptCard } from "./LetterPromptCard.tsx";
+import { defaultRecipient } from "./recipient.ts";
 import type { LetterDecision } from "../api/types.ts";
 
 interface Message {
@@ -31,6 +33,7 @@ const POLL_LIMIT = 90; // ~3 dk: parse + chunk + analiz + embed
 
 const QUICK_PROMPTS = [
   "Özet çıkar",
+  "Belgedeki eksik bilgiler nedir?",
   "Yönlendirme neden bu servis?",
   "Onaylayacak şekilde cevap yazısı yaz",
 ];
@@ -48,13 +51,21 @@ const QUICK_PROMPTS = [
  *
  * Cevap yazisi: sunucu mesaji yazi talebi olarak sinifladiginda "intent" olayi
  * gelir ve RAG cevabi hic uretilmez; yerine sohbete LetterPromptCard dusulur.
- * Kart gecmise YAZILMAZ — sayfa yenilendiginde kaybolur; kalici iz, yazi
- * kaydedildiginde cevap yazisi tarafinda olusur.
+ * Hem soru hem kart gecmise yazilir (chat_messages.letter_intent): calisanin
+ * "reddedecek bir yazi yaz" talebi, cevabi henuz uretilmemis olsa da sorulmus
+ * bir sorudur ve ekran yenilendiginde kaybolmamali.
  */
 export function ChatView() {
   const { doc, chat, sessionId } = useDocumentContext();
   const [messages, setMessages] = useState<Message[]>(() =>
-    chat.map((m) => ({ role: m.role, content: m.content, sources: m.sources })),
+    chat.map((m) => ({
+      role: m.role,
+      content: m.content,
+      sources: m.sources,
+      // Kart gecmiste de kart olarak durur: yazi talebi, cevabi henuz yazilmamis
+      // bir istek olarak kayitli kalmali.
+      letter: m.letter_intent ?? undefined,
+    })),
   );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -172,6 +183,8 @@ export function ChatView() {
       }
       if (letter) {
         setMessages((m) => [...m, { role: "assistant", content: "", letter }]);
+        // Kart da gecmise yazildi; onbellekteki kopya artik eksik (bkz. asagisi).
+        void qc.invalidateQueries({ queryKey: ["document", doc.id] });
       } else if (answer) {
         setMessages((m) => [...m, { role: "assistant", content: answer, sources }]);
         // Sunucu bu alisverisi gecmise yazdi; onbellekteki kopya artik eksik.
@@ -222,13 +235,17 @@ export function ChatView() {
                 docId={doc.id}
                 suggestedDecision={m.letter.karar}
                 suggestedReason={m.letter.gerekce}
-                defaultRecipient={doc.entities?.kisiKurumlar[0] ?? ""}
+                defaultRecipient={defaultRecipient(doc, doc.routing.mahkemeYazismasi)}
+                courtLetter={doc.routing.mahkemeYazismasi}
+                // Kapatma yalnizca ekrani toparlar; kayit gecmiste kalir ve
+                // evrak yeniden acildiginda kart geri gelir.
                 onDismiss={() => setMessages((list) => list.filter((_, k) => k !== i))}
                 onPlainAnswer={() => {
-                  // Karti ve onu doguran soruyu geri al, ayni soruyu bu kez
-                  // siniflandirmayi atlayarak duz cevap icin yeniden gonder.
+                  // Ayni soruyu bu kez siniflandirmayi atlayarak yeniden sor.
+                  // Onceki tur ekrandan SILINMEZ: artik gecmise yazilmis durumda
+                  // ve yerel olarak gizlemek yalnizca yenilemeye kadar surerdi —
+                  // calisan da gercekten iki kez sordu, gecmis bunu gostersin.
                   const question = messages[i - 1]?.content ?? "";
-                  setMessages((list) => list.slice(0, Math.max(0, i - 1)));
                   if (question) void send(question, { skipIntent: true });
                 }}
               />
@@ -381,18 +398,6 @@ function PaperclipIcon() {
   );
 }
 
-/**
- * Modelin yazdigi **kalin** isaretlemesini gorunur kilar.
- *
- * Tam bir markdown isleyicisi bilerek yok: cevaplar duz resmi metin ve
- * dangerouslySetInnerHTML'den kacinmak istiyoruz. Yalnizca ** ** ayristirilir,
- * geri kalan her sey React tarafindan metin olarak basilir — enjeksiyon yok.
- */
-function RichText({ raw }: { raw: string }) {
-  const parts = raw.split(/\*\*(.+?)\*\*/gs);
-  return <>{parts.map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p))}</>;
-}
-
 function Bubble({ message, streaming = false }: { message: Message; streaming?: boolean }) {
   const isUser = message.role === "user";
   return (
@@ -404,12 +409,16 @@ function Bubble({ message, streaming = false }: { message: Message; streaming?: 
             : "max-w-[88%] rounded-[14px_14px_14px_4px] border border-cizgi bg-white px-4 py-3.5 text-metin-2 shadow-balon"
         }
       >
-        <div
-          className={`text-[13.5px] leading-[1.6] whitespace-pre-wrap text-pretty ${
-            streaming ? "animate-pulse" : ""
-          }`}
-        >
-          <RichText raw={message.content} />
+        {/* Kullanici mesaji duz metin olarak yazilir; markdown yalnizca modelin
+            cevabinda anlamli — kullanicinin yazdigi bir yildizi vurgu sanmayalim. */}
+        <div className={streaming ? "animate-pulse" : undefined}>
+          {isUser ? (
+            <div className="text-[13.5px] leading-[1.6] whitespace-pre-wrap text-pretty">
+              {message.content}
+            </div>
+          ) : (
+            <Markdown text={message.content} />
+          )}
         </div>
         {message.sources && message.sources.length > 0 && (
           <div className="mt-3 border-t border-cizgi-3 pt-2.5">

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import { ArticleChip, SectionLabel, WarningBox } from "../components/ui.tsx";
-import type { DocumentSummary } from "../api/types.ts";
+import type { DocumentGap, DocumentSummary } from "../api/types.ts";
 
 /**
  * Sag detay paneli — sohbet ve cevap yazisi ekranlarinda ⚙ ile acilip kapanir.
@@ -66,6 +66,7 @@ export function RightPanel({
       </div>
 
       <ExtractedInfo entities={doc.entities} />
+      <GapsCard gaps={doc.eksikler} />
       <RoutingCard doc={doc} />
 
       <SectionLabel>Kaynak belge</SectionLabel>
@@ -134,6 +135,73 @@ function ExtractedInfo({ entities }: { entities: DocumentSummary["entities"] }) 
 }
 
 const joinValues = (v: string[] | undefined): string => (v?.length ? v.join(" · ") : "—");
+
+/**
+ * Eksik bilgi / tutarsizlik bulgulari.
+ *
+ * Tarama hatta yapiliyor ve belgeyle birlikte kayitli — panel yalnizca
+ * gosterir. Onceden dugmeyle sorulup atiliyordu; her acilista yeniden model
+ * cagirmak hem bekletiyor hem de sohbetin goremedigi, yalnizca panele ozel
+ * bir liste uretiyordu. Tek kayit, tek liste.
+ */
+function GapsCard({ gaps }: { gaps: DocumentGap[] | null }) {
+  return (
+    <>
+      <SectionLabel>Eksik bilgiler</SectionLabel>
+      <div className="mt-2.5 mb-6 space-y-2">
+        {/* null ile bos dizi ayni sey degil: biri taranmadi, digeri temiz cikti. */}
+        {gaps === null ? (
+          <p className="text-[11.5px] leading-[1.55] text-silik">
+            Bu evrak için eksik bilgi taraması yapılmamış.
+          </p>
+        ) : gaps.length === 0 ? (
+          <p className="rounded-xl border border-onay-cizgi bg-onay-zemin px-3 py-2.5 text-[11.5px] leading-[1.55] text-onay">
+            Belgede eksik ya da çelişkili bir bilgi bulunamadı.
+          </p>
+        ) : (
+          gaps.map((b, i) => <GapRow key={i} gap={b} />)
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Onem rengi: kritik olan cevap yazisini bloklar, digerleri yalnizca not duser. */
+const GAP_TONES: Record<DocumentGap["onem"], string> = {
+  kritik: "border-uyari-cizgi bg-uyari-zemin text-uyari",
+  orta: "border-gib-cizgi bg-gib-acik text-gib",
+  dusuk: "border-cizgi bg-yuzey text-ikincil",
+};
+
+const GAP_KIND_LABELS: Record<DocumentGap["tur"], string> = {
+  eksik: "Eksik",
+  tutarsizlik: "Tutarsızlık",
+};
+
+function GapRow({ gap }: { gap: DocumentGap }) {
+  return (
+    <div className="rounded-xl border border-cizgi bg-panel p-3">
+      <div className="mb-1.5 flex items-start gap-2">
+        <span
+          className={`shrink-0 rounded-[5px] border px-[6px] py-[2px] text-[10px] font-semibold ${GAP_TONES[gap.onem]}`}
+        >
+          {GAP_KIND_LABELS[gap.tur]}
+        </span>
+        <span className="text-[12.5px] leading-[1.35] font-semibold text-metin-2">
+          {gap.baslik}
+        </span>
+      </div>
+      <p className="text-[11.5px] leading-[1.6] text-pretty text-govde">{gap.aciklama}</p>
+      {/* Alinti yoksa satir hic basilmaz — bos bir tirnak, dayanak varmis izlenimi verir.
+          Kelimeler degistirilmez, yalnizca taramadan gelen fazla bosluk toparlanir. */}
+      {gap.kanit && (
+        <p className="mt-2 border-l-2 border-cizgi-4 pl-2 text-[11px] leading-[1.5] text-silik italic">
+          “{gap.kanit.replace(/\s+/g, " ").trim()}”
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * Yonlendirme karti.

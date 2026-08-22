@@ -1,11 +1,51 @@
 import type { ServiceRoutingDecision } from "@albay/shared";
 import { pool } from "../db/pool.ts";
+import { isRegulationService } from "./catalog.ts";
 
+/**
+ * Katalogda karsiligi olmayan servis adini dayanaksiz sayar.
+ *
+ * NEDEN: `servis` serbest metindir ve model oraya bir BIRIM adi ("Vergilendirme")
+ * ya da uydurma bir ad yazabiliyor. Boyle bir kayit hicbir servis havuzuna
+ * (routed_service = <katalog adi>) dusmez, ama routed_service dolu oldugu icin
+ * yonlendirilemeyenler havuzuna da girmez — evrak arayuzden sessizce kaybolur.
+ * Sessiz kaybolmanin tek dogru karsiligi manuel incelemedir.
+ *
+ * Gerekce SILINMEZ, uzerine not dusulur: evrakla ilgilenecek calisanin modelin
+ * neyi neden onerdigini gormesi gerekiyor.
+ */
+function katalogDisiKarar(d: ServiceRoutingDecision): ServiceRoutingDecision {
+  return {
+    ...d,
+    anaBirim: null,
+    digerBirim: null,
+    servis: null,
+    altServis: null,
+    ilgiliMaddeler: [],
+    guvenSkoru: 0,
+    belirlenemedi: true,
+    gerekce:
+      `${d.gerekce}\n\n[Otomatik kontrol] Karar "${d.servis}" adını gösteriyor;` +
+      " yönetmelik kataloğunda böyle bir servis yok. Evrak manuel incelemeye alındı.",
+  };
+}
+
+/**
+ * Yonlendirme kararinin TEK yazma noktasi — hem ingest hatti hem "yeniden
+ * hesapla" ucu buradan gecer. Katalog kontrolu de bu yuzden burada duruyor:
+ * cagiranlara birakilsa, ikisinden birinin gunun birinde atlamasi demekti.
+ */
 export async function saveRoutingDecision(
   docId: string,
-  d: ServiceRoutingDecision,
+  decision: ServiceRoutingDecision,
   routingKey?: string,
 ): Promise<void> {
+  const katalogDisi =
+    !decision.belirlenemedi &&
+    !!decision.servis &&
+    !(await isRegulationService(decision.servis));
+  const d = katalogDisi ? katalogDisiKarar(decision) : decision;
+
   await pool.query(
     `UPDATE documents SET
        routed_birim = $2, routed_service = $3, routing_confidence = $4,
@@ -19,7 +59,7 @@ export async function saveRoutingDecision(
      WHERE id = $1`,
     [
       docId,
-      d.anaBirim ?? d.digerBirim,
+      d.belirlenemedi ? null : (d.anaBirim ?? d.digerBirim),
       d.belirlenemedi ? null : d.servis,
       d.guvenSkoru,
       d.gerekce,

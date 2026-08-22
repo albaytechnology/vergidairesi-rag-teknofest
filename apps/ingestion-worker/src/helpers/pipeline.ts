@@ -7,7 +7,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { chunkDocument, chunkRegulationDocument } from "@albay/chunking";
-import { OllamaClient, analyzeDocument } from "@albay/llm";
+import { OllamaClient, analyzeDocument, analyzeDocumentGaps } from "@albay/llm";
 import { routeDocument } from "@albay/agents";
 import { config, type Corpus, type DocumentAnalysis } from "@albay/shared";
 import {
@@ -16,6 +16,7 @@ import {
   chunksToEmbedForDoc,
   markEmbedded,
   saveDocumentAnalysis,
+  saveDocumentGaps,
   saveRoutingDecision,
   setDocumentCorpus,
 } from "@albay/ingestion";
@@ -118,6 +119,22 @@ export async function processDocument(
     trace.push(...routing.trace);
     routedService = routing.decision.belirlenemedi ? null : routing.decision.servis;
     routingStatus = routing.decision.belirlenemedi ? "belirlenemedi" : "routed";
+
+    /*
+     * Eksik bilgi taramasi hattin bir adimi.
+     *
+     * Istek uzerine calistirilabilirdi ama sonuc hicbir yerde durmuyordu:
+     * panel her acilista yeniden sormak zorunda kaliyor, sohbet ise bulgulari
+     * hic goremiyordu. Evrak zaten hatta bir kez okunuyor — tarama da burada
+     * yapilip kaydediliyor, panel ve sohbet ayni listeye bakiyor.
+     *
+     * Yonlendirmeden SONRA ve ayri bir cagri: bulgular yonlendirme kararinin
+     * girdisi degil. Eksik bir bilginin evrakin hangi servise gidecegini
+     * degistirmemesi gerekir — eksik olsa da o servisin isidir.
+     */
+    const gaps = await analyzeDocumentGaps(ollama, { filename: doc.filename, text: markdown });
+    await saveDocumentGaps(doc.id, gaps.bulgular);
+    trace.push(`eksik bilgi taramasi → ${gaps.bulgular.length} bulgu`);
   }
 
   // 4. Embed

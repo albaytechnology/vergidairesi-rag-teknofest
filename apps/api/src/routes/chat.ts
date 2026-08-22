@@ -1,11 +1,17 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { askStream, classifyChatIntent, type ChatEvent } from "@albay/agents";
+import {
+  askStream,
+  classifyChatIntent,
+  type ChatEvent,
+  type DocumentRecord,
+} from "@albay/agents";
 import {
   appendChatExchange,
   getChatHistory,
   getDocumentDetail,
   sessionDocumentIds,
 } from "@albay/ingestion";
+import type { DocumentDetail } from "@albay/ingestion";
 import type { LetterDecision } from "@albay/shared";
 
 interface ChatBody {
@@ -43,7 +49,10 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     const { question, documentId, sessionId, niyetAtla } = req.body ?? {};
     if (!question?.trim()) return reply.code(400).send({ error: "question zorunlu" });
 
-    if (documentId && !(await getDocumentDetail(documentId))) {
+    // Detay bir kez okunur: hem varlik kontrolu hem de sohbete verilecek
+    // sistem kaydi (ozet, cikarilan bilgiler, yonlendirme karari) ayni satirdan gelir.
+    const doc = documentId ? await getDocumentDetail(documentId) : null;
+    if (documentId && !doc) {
       return reply.code(404).send({ error: "Belge bulunamadi" });
     }
 
@@ -59,8 +68,21 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       if (niyet.tur === "cevap_yazisi") {
         sendSse(reply, { type: "trace", message: "niyet: cevap yazisi" });
         sendSse(reply, { type: "intent", karar: niyet.karar, gerekce: niyet.gerekce });
-        // Gecmise YAZILMAZ: kart bir eylem alani, kayda deger bir cevap degil.
-        // Kalici iz, yazi kaydedildiginde response_letters tarafinda olusur.
+        /*
+         * Gecmise YAZILIR. Onceden yazilmiyordu ("kart bir eylem alani, kayda
+         * deger bir cevap degil") ama bu, calisanin SORUSUNU da siliyordu:
+         * sayfa yenilendiginde "reddedecek bir cevap yazisi yaz" mesaji hic
+         * sorulmamis gibi oluyordu. Asistan mesaji metin yerine kart oldugu
+         * icin icerik kisa bir kayit cumlesi, kartin kendisi letter_intent'te.
+         */
+        if (documentId) {
+          await appendChatExchange({
+            documentId,
+            question,
+            answer: "Cevap yazısı oluşturma alanı açıldı.",
+            letterIntent: { karar: niyet.karar ?? null, gerekce: niyet.gerekce ?? null },
+          });
+        }
         reply.raw.end();
         return reply;
       }
@@ -79,7 +101,12 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     let cevap = "";
     let kaynaklar: string[] = [];
     try {
-      for await (const ev of askStream(question, { docId: documentId, extraDocIds, history })) {
+      for await (const ev of askStream(question, {
+        docId: documentId,
+        extraDocIds,
+        history,
+        record: doc ? toRecord(doc) : undefined,
+      })) {
         if (ev.type === "done") cevap = ev.answer;
         if (ev.type === "sources") kaynaklar = ev.sources;
         sendSse(reply, ev);
@@ -103,6 +130,31 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>("/api/documents/:id/chat", async (req) => {
     return { messages: await getChatHistory(req.params.id, 100) };
   });
+}
+
+/**
+ * Belge satirini sohbetin gorecegi sistem kaydina cevirir.
+ *
+ * Arayuzdeki detay panelinin bastigi alanlarin AYNISI: calisan panelde bir sey
+ * okuyup sohbete sordugunda iki tarafin ayni bilgiye bakmasi gerekiyor.
+ */
+function toRecord(doc: DocumentDetail): DocumentRecord {
+  return {
+    filename: doc.filename,
+    konu: doc.doc_subject,
+    ozet: doc.doc_summary_long,
+    docType: doc.doc_type,
+    entities: doc.extracted_entities,
+    yasamDongusu: doc.lifecycle_status,
+    eksikler: doc.gap_findings,
+    routing: {
+      birim: doc.routed_birim,
+      servis: doc.routed_service,
+      guvenSkoru: doc.routing_confidence,
+      gerekce: doc.routing_reasoning,
+      maddeler: doc.routing_regulation_refs ?? [],
+    },
+  };
 }
 
 function startSse(reply: FastifyReply): void {

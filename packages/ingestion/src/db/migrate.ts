@@ -7,6 +7,9 @@ import { sql as lifecycle } from "./migrations/005-lifecycle.ts";
 import { sql as chat } from "./migrations/006-chat.ts";
 import { sql as letters } from "./migrations/007-letters.ts";
 import { sql as sessionUploads } from "./migrations/008-session-uploads.ts";
+import { sql as gaps } from "./migrations/009-gaps.ts";
+import { sql as chatLetterIntent } from "./migrations/010-chat-letter-intent.ts";
+import { sql as routingCatalog } from "./migrations/011-routing-catalog.ts";
 
 /**
  * Semanin adimlari, CALISMA SIRASINDA.
@@ -25,6 +28,9 @@ const ADIMLAR = [
   chat,
   letters,
   sessionUploads,
+  gaps,
+  chatLetterIntent,
+  routingCatalog,
 ];
 
 /**

@@ -4,7 +4,12 @@ import type { SearchHit } from "@albay/retrieval";
 import type { ServiceRoutingDecision } from "@albay/shared";
 import { verifyCitations } from "../src/routing/verify-citations.ts";
 import { reconcileBirim } from "../src/routing/reconcile.ts";
-import { sameService, sameServiceStrict, isEntryPointService } from "../src/routing/services.ts";
+import {
+  sameService,
+  sameServiceStrict,
+  isEntryPointService,
+  isDisputeService,
+} from "../src/routing/services.ts";
 import { normalizeMaddeNo, uncertainMaddeNumbers } from "../src/routing/madde.ts";
 
 function hit(metadata: Record<string, unknown>): SearchHit {
@@ -216,4 +221,18 @@ test("OCR'dan turetilmis madde numaralari isaretlenir", () => {
     hit({ maddeNo: "22", maddeNoKesin: true }),
   ]);
   assert.deepEqual([...belirsiz], ["21"]);
+});
+
+/*
+ * Ihtilafli Isler Servisi, cevap yazisinin muhatabini degistiren TEK servis:
+ * evrak dava dilekcesidir, yazi mahkemeye gider. Tespit servis adindan yapiliyor
+ * ve LLM'in yazimindaki kucuk sapmalar (aksan, buyuk harf) karari kaydirmamali.
+ */
+test("ihtilafli isler servisi tanınır, komsu servisler tanınmaz", () => {
+  assert.ok(isDisputeService("İhtilaflı İşler Servisi"));
+  assert.ok(isDisputeService("ihtilafli isler servisi"));
+  assert.ok(isDisputeService("Vergilendirme / İhtilaflı İşler Servisi"));
+  assert.equal(isDisputeService("Sürekli Yükümlülükler Vergilendirme Servisi"), false);
+  assert.equal(isDisputeService(null), false);
+  assert.equal(isDisputeService(""), false);
 });

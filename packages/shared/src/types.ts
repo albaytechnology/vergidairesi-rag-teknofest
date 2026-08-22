@@ -158,6 +158,34 @@ export const DocumentAnalysisSchema = z.object({
 });
 export type DocumentAnalysis = z.infer<typeof DocumentAnalysisSchema>;
 
+/**
+ * Evrakta EKSIK ya da KENDI ICINDE CELISKILI olan bilgiler.
+ *
+ * Analizden (DocumentAnalysisSchema) farki: o, evrakta NE YAZDIGINI cikarir;
+ * bu, evrakta NE YAZMADIGINI ya da iki yerde farkli yazdigini gosterir —
+ * calisan cevap yazisini kurmadan once neyi tamamlatmasi gerektigini gorsun.
+ *
+ * kanit alani zorunlu: bulgu belgeden birebir bir alintiya baglanmazsa
+ * calisanin dogrulayacagi bir sey kalmaz ve "eksik" iddiasi modelin sozune
+ * kalir. Alinti bulunamayan bulgu (orn. hic yazilmamis bir alan) icin bos
+ * string yazilir; arayuz o zaman alinti satirini basmaz.
+ */
+export const DocumentGapSchema = z.object({
+  /** "eksik": belgede hic yok. "tutarsizlik": iki yerde farkli/celiskili yazilmis. */
+  tur: z.enum(["eksik", "tutarsizlik"]),
+  baslik: z.string(),
+  aciklama: z.string(),
+  onem: z.enum(["kritik", "orta", "dusuk"]),
+  /** Belgeden birebir alinti; alintilanacak bir yer yoksa "". */
+  kanit: z.string(),
+});
+export type DocumentGap = z.infer<typeof DocumentGapSchema>;
+
+export const DocumentGapReportSchema = z.object({
+  bulgular: z.array(DocumentGapSchema),
+});
+export type DocumentGapReport = z.infer<typeof DocumentGapReportSchema>;
+
 // ─── Faz 5c: cevap yazisi ─────────────────────────────────────────────
 
 /** Evraga verilecek karar. Yaziyi yazan degil, servis calisani secer. */

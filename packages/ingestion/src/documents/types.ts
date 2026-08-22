@@ -1,4 +1,4 @@
-import type { Corpus, ExtractedEntities } from "@albay/shared";
+import type { Corpus, DocumentGap, ExtractedEntities } from "@albay/shared";
 import type { LifecycleStatus } from "./lifecycle.ts";
 
 /** Parse hattinin durumu — is akisi durumu icin bkz. LifecycleStatus. */
@@ -36,6 +36,9 @@ export interface DocumentDetail extends DocumentRow {
   routing_reasoning: string | null;
   routing_regulation_refs: { maddeNo: string; baslik: string }[] | null;
   routing_status: string;
+  /** Eksik bilgi taramasinin bulgulari; null ise evrak hic taranmadi. */
+  gap_findings: DocumentGap[] | null;
+  gaps_scanned_at: string | null;
   lifecycle_status: LifecycleStatus;
   completed_at: string | null;
   created_at: string;
