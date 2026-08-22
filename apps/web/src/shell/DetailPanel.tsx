@@ -5,11 +5,17 @@ import { ArticleChip, SectionLabel, WarningBox } from "../components/ui.tsx";
 import type { DocumentGap, DocumentSummary } from "../api/types.ts";
 
 /**
- * Sag detay paneli — sohbet ve cevap yazisi ekranlarinda ⚙ ile acilip kapanir.
+ * Belge detay paneli — sohbet ve cevap yazisi ekranlarinda acilip kapanir.
  *
- * Kararin dayanaklari (ozet, cikarilan bilgiler, yonlendirme gerekcesi, kaynak
- * belge) sohbetin YANINDA durur: calisan cevabi okurken belgeye donmek zorunda
- * kalmasin, iki bilgi ayni ekranda karsilastirilabilsin.
+ * Kararin dayanaklari (ozet, cikarilan bilgiler, eksik bilgi bulgulari,
+ * yonlendirme gerekcesi, kaynak belge) sohbetin YANINDA durur: calisan cevabi
+ * okurken belgeye donmek zorunda kalmasin, iki bilgi ayni ekranda
+ * karsilastirilabilsin.
+ *
+ * Panel SOLDA, sol seritle sohbetin arasinda: okuma sirasi "hangi evrak →
+ * neye dayaniyor → konusma" seklinde soldan saga akiyor. Kapanip acilmasi
+ * genislik animasyonuyla oluyor (display:none ile aninda kaybolmuyor); kapaliyken
+ * geride ok ikonlu ince bir serit kalir, boylece panelin varligi unutulmaz.
  */
 /**
  * Evrak tipi rozetinin okunur etiketi.
@@ -31,64 +37,110 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 const docTypeLabel = (docType: string): string =>
   DOC_TYPE_LABELS[docType] ?? docType.charAt(0).toLocaleUpperCase("tr-TR") + docType.slice(1);
 
-export function RightPanel({
+export function DetailPanel({
   doc,
+  open,
+  onOpen,
   onClose,
 }: {
   doc: DocumentSummary & { path: string };
+  open: boolean;
+  onOpen: () => void;
   onClose: () => void;
 }) {
   return (
-    <aside className="w-[340px] flex-[0_0_340px] overflow-y-auto border-l border-cizgi bg-white px-5 pt-[22px] pb-10">
-      <div className="mb-[18px] flex items-center justify-between">
-        <div className="text-[12.5px] font-bold tracking-[-.01em]">Belge detayı</div>
+    <div className="flex min-h-0 shrink-0">
+      {/* Kapali serit: panelin nereye gittigini gosteren tutamak. */}
+      {!open && (
         <button
           type="button"
-          onClick={onClose}
-          aria-label="Paneli kapat"
-          className="h-[26px] w-[26px] rounded-[7px] border border-cizgi bg-panel text-[13px] leading-none text-ikincil transition-colors hover:border-cizgi-5"
+          onClick={onOpen}
+          title="Belge detayını aç"
+          aria-label="Belge detayını aç"
+          className="flex w-11 flex-[0_0_44px] cursor-pointer flex-col items-center gap-2 border-r border-cizgi bg-panel pt-[22px] text-ikincil transition-colors hover:bg-yuzey hover:text-metin"
         >
-          ✕
-        </button>
-      </div>
-
-      <SectionLabel>Özet</SectionLabel>
-      <p className="mt-2 mb-3 text-[12.5px] leading-[1.65] text-pretty text-govde">
-        {doc.ozet ?? "Bu evrak için özet üretilmemiş."}
-      </p>
-      <div className="mb-6 flex items-center gap-2">
-        {doc.docType && (
-          <span className="rounded-[5px] border border-gib-cizgi bg-gib-acik px-[7px] py-[3px] text-[10.5px] font-semibold text-gib">
-            {docTypeLabel(doc.docType)}
+          <span className="text-[15px] leading-none">›</span>
+          {/* Dikey etiket: 44px'e yatay metin sigmaz, ama serit adsiz kalmamali. */}
+          <span className="text-[10px] font-semibold tracking-[.12em] text-silik uppercase [writing-mode:vertical-rl]">
+            Detay
           </span>
-        )}
-        <span className="truncate text-[11px] text-silik">{doc.filename}</span>
-      </div>
+        </button>
+      )}
 
-      <ExtractedInfo entities={doc.entities} />
-      <GapsCard gaps={doc.eksikler} />
-      <RoutingCard doc={doc} />
+      <aside
+        // Genislik animasyonu: 0 ↔ 340px. Icerik SABIT genislikte bir kutuda
+        // duruyor, aksi halde panel kapanirken metin her karede yeniden
+        // sariliyor ve animasyon titriyordu.
+        className={`overflow-hidden border-r border-cizgi bg-white transition-[width,opacity] duration-[280ms] ease-[cubic-bezier(.4,0,.2,1)] ${
+          open ? "w-[340px] opacity-100" : "w-0 opacity-0"
+        }`}
+        aria-hidden={!open}
+      >
+        <div className="h-full w-[340px] overflow-y-auto px-5 pt-[22px] pb-10">
+          <div className="mb-[18px] flex items-center justify-between gap-2">
+            <div className="text-[12.5px] font-bold tracking-[-.01em]">Belge detayı</div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Paneli kapat"
+              className="h-[26px] w-[26px] rounded-[7px] border border-cizgi bg-panel text-[13px] leading-none text-ikincil transition-colors hover:border-cizgi-5"
+            >
+              ‹
+            </button>
+          </div>
 
-      <SectionLabel>Kaynak belge</SectionLabel>
-      <div className="mt-2.5 overflow-hidden rounded-xl border border-cizgi bg-yuzey">
-        <iframe
-          title="Kaynak belge önizleme"
-          src={`/api/documents/${doc.id}/file`}
-          className="block h-[190px] w-full border-0 bg-white"
-        />
-        <div className="flex items-center justify-between gap-2 border-t border-cizgi bg-white px-3 py-2.5">
-          <span className="truncate text-[11px] text-ikincil">{doc.filename}</span>
-          <a
-            href={`/api/documents/${doc.id}/file`}
-            target="_blank"
-            rel="noreferrer"
-            className="shrink-0 rounded-[7px] border border-cizgi-2 bg-panel px-[9px] py-[5px] text-[11px] font-semibold text-govde transition-colors hover:border-cizgi-5"
-          >
-            Aç
-          </a>
+          {/* Once evrakin kimligi (etiketler + dosya adi), sonra ozeti: panel bir
+              belgenin yaninda duruyor, hangi belge oldugu en ustte yazmali.
+              KVKK rozeti ust bardan buraya tasindi: kisisel veri uyarisi
+              belgenin bir ozelligi, calisma alaninin degil. */}
+          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+            {doc.docType && (
+              <span className="rounded-[5px] border border-gib-cizgi bg-gib-acik px-[7px] py-[3px] text-[10.5px] font-semibold text-gib">
+                {docTypeLabel(doc.docType)}
+              </span>
+            )}
+            {doc.containsPII && (
+              <span
+                title="Belge kişisel veri içeriyor"
+                className="rounded-[5px] border border-uyari-cizgi bg-uyari-zemin-2 px-[7px] py-[3px] font-mono text-[10.5px] text-uyari"
+              >
+                KVKK
+              </span>
+            )}
+          </div>
+          <div className="mb-4 truncate text-[11px] text-silik">{doc.filename}</div>
+
+          <SectionLabel>Özet</SectionLabel>
+          <p className="mt-2 mb-6 text-[12.5px] leading-[1.65] text-pretty text-govde">
+            {doc.ozet ?? "Bu evrak için özet üretilmemiş."}
+          </p>
+
+          <ExtractedInfo entities={doc.entities} />
+          <GapsCard gaps={doc.eksikler} />
+          <RoutingCard doc={doc} />
+
+          <SectionLabel>Kaynak belge</SectionLabel>
+          <div className="mt-2.5 overflow-hidden rounded-xl border border-cizgi bg-yuzey">
+            <iframe
+              title="Kaynak belge önizleme"
+              src={`/api/documents/${doc.id}/file`}
+              className="block h-[190px] w-full border-0 bg-white"
+            />
+            <div className="flex items-center justify-between gap-2 border-t border-cizgi bg-white px-3 py-2.5">
+              <span className="truncate text-[11px] text-ikincil">{doc.filename}</span>
+              <a
+                href={`/api/documents/${doc.id}/file`}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded-[7px] border border-cizgi-2 bg-panel px-[9px] py-[5px] text-[11px] font-semibold text-govde transition-colors hover:border-cizgi-5"
+              >
+                Aç
+              </a>
+            </div>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </div>
   );
 }
 

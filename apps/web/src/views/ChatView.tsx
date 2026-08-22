@@ -206,7 +206,9 @@ export function ChatView() {
     <>
       <div className="flex-1 overflow-y-auto px-7 pt-[26px] pb-2">
         <div className="mx-auto flex max-w-[760px] flex-col gap-[18px]">
-          <div className="flex flex-wrap justify-center gap-2 pb-1.5">
+          {/* Hazir sorular sohbetin ILK ELEMANI: baslik blogunun icinde degil,
+              akisin icinde ve sola hizali — bunlar da birer mesaj taslagi. */}
+          <div className="flex flex-wrap gap-2 pb-1.5">
             {QUICK_PROMPTS.map((p) => (
               <button
                 key={p}
@@ -221,7 +223,7 @@ export function ChatView() {
           </div>
 
           {messages.length === 0 && streaming === null && (
-            <p className="pt-2 text-center text-[12.5px] leading-relaxed text-silik">
+            <p className="pt-2 text-[12.5px] leading-relaxed text-silik">
               Bu evrak hakkında soru sorun — cevaplar yalnızca belgenin içeriğine dayanır.
               <br />
               Ek bir mevzuat veya belge için ataç düğmesini kullanabilirsiniz.

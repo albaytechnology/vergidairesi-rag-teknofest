@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
-import { ArticleChip, WarningBox } from "../components/ui.tsx";
+import { WarningBox } from "../components/ui.tsx";
 import { HeaderNav } from "../shell/HeaderNav.tsx";
-import { documentTitle, useDocuments } from "../hooks/useDocuments.ts";
 import type { UploadStage } from "../api/types.ts";
 
-const ACCEPTED_TYPES = ".pdf,.docx,.xlsx,.pptx,.txt,.md,.html";
+const ACCEPTED_TYPES = ".pdf,.docx,.xlsx,.txt,.md";
 
 const STAGE_LABEL: Record<UploadStage, string> = {
   kuyrukta: "kayda alınıyor — parse bekliyor",
@@ -17,17 +16,21 @@ const STAGE_LABEL: Record<UploadStage, string> = {
 };
 
 /**
- * Ana ekran — evrak girisi ve devam edilecek isler.
+ * Evrak ekle — sistemin tek giris noktasi.
  *
  * Yonetmelikte kuruma gelen her belge once Yazisma ve Arsiv Servisi'ne girer
  * (M.11-B-I-6); buradaki birakma alani o girisi temsil eder. Yukleme istegi
  * LLM'i BEKLEMEZ: dosya diske yazilip kuyruga birakilir, ilerleme yoklamayla
  * gosterilir ve belge aranabilir hale gelince sohbeti acilir.
+ *
+ * Ekranda YALNIZCA yukleme var. Onceki surumde altta "cevap bekleyen
+ * evraklardan devam edin" listesi duruyordu; ayni is artik Servisler ve Arsiv
+ * ekranlarinda, kendi filtreleriyle yapiliyor — burada tekrari, yuklemeyi
+ * sayfanin kucuk bir parcasi haline getiriyordu.
  */
-export function HomeView() {
+export function UploadView() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { suggestions, isLoading } = useDocuments();
 
   const [paths, setPaths] = useState<string[]>([]);
   /** Diskte ad carpismasin diye UUID onekli yaziliyor; listede kullanicinin sectigi ad gorunur. */
@@ -90,15 +93,12 @@ export function HomeView() {
     <>
       <header className="flex h-[60px] flex-[0_0_60px] items-center gap-3 border-b border-cizgi bg-white px-5">
         <HeaderNav />
-        <span className="truncate text-[13px] text-silik">
-          Evrak asistanı — bir dilekçe seçin ya da yeni evrak ekleyin
-        </span>
       </header>
 
       <div className="flex flex-1 justify-center overflow-y-auto px-7 py-14">
         <div className="w-full max-w-[660px] animate-yukse">
           <h1 className="m-0 text-center text-[26px] font-bold tracking-[-.02em]">
-            Sınıflandırılmış dosyalardan birini seçin
+            Evrak ekle
           </h1>
           <p className="mt-2 mb-[26px] text-center text-[13.5px] text-pretty text-ikincil">
             Sisteme gelen evrak otomatik okunur, ilgili servise yönlendirilir ve cevap yazısı
@@ -184,68 +184,8 @@ export function HomeView() {
             </div>
           )}
 
-          <div className="mt-6 mb-4 flex items-center gap-3">
-            <span className="h-px flex-1 bg-cizgi" />
-            <span className="text-[11.5px] font-medium text-silik">
-              ya da cevap bekleyen evraklardan devam edin
-            </span>
-            <span className="h-px flex-1 bg-cizgi" />
-          </div>
-
-          {isLoading ? (
-            <Skeleton />
-          ) : !suggestions.length ? (
-            <p className="py-6 text-center text-[12.5px] leading-relaxed text-silik">
-              Açılmayı bekleyen evrak yok. Yeni bir dilekçe ekleyin ya da sol şeritten önceki
-              sohbetlerinize dönün.
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {suggestions.map((d) => (
-                <Link
-                  key={d.id}
-                  to={`/documents/${d.id}`}
-                  className="block rounded-xl border border-cizgi bg-white px-4 py-3.5 transition-[border-color,box-shadow] hover:border-cizgi-4 hover:shadow-kart"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13.5px] leading-[1.4] font-semibold">
-                        {documentTitle(d)}
-                      </div>
-                      <div className="mt-[3px] truncate text-[11.5px] text-soluk">
-                        {d.filename}
-                      </div>
-                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11.5px] text-ikincil">
-                          {d.routing.servis ?? "yönlendirilemedi — manuel inceleme"}
-                        </span>
-                        {d.routing.maddeler.map((m) => (
-                          <ArticleChip key={m.maddeNo}>
-                            <span title={m.baslik}>M.{m.maddeNo}</span>
-                          </ArticleChip>
-                        ))}
-                      </div>
-                    </div>
-                    <span className="shrink-0 rounded-md bg-gib-acik px-2 py-1 text-[11px] font-semibold whitespace-nowrap text-gib">
-                      cevap bekliyor
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </>
-  );
-}
-
-function Skeleton() {
-  return (
-    <div className="flex flex-col gap-2">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="h-[92px] animate-pulse rounded-xl border border-cizgi bg-white" />
-      ))}
-    </div>
   );
 }

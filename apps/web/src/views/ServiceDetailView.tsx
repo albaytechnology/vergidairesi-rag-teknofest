@@ -31,9 +31,6 @@ export function ServiceDetailView() {
     <>
       <header className="flex h-[60px] flex-[0_0_60px] items-center gap-3 border-b border-cizgi bg-white px-5">
         <HeaderNav />
-        <span className="truncate text-[13px] text-silik">
-          {service ?? "Yönlendirilemeyen evraklar"}
-        </span>
       </header>
 
       <div className="flex-1 overflow-y-auto px-7 pt-7 pb-14">

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { Link, Outlet, useLocation, useOutletContext, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import { ErrorBox, Loading, StatusChip } from "../components/ui.tsx";
-import { RightPanel } from "./RightPanel.tsx";
-import { HeaderNav, rememberLastDocument } from "./HeaderNav.tsx";
+import { DetailPanel } from "./DetailPanel.tsx";
+import { HeaderNav } from "./HeaderNav.tsx";
 import type { ChatMessage, DocumentSummary } from "../api/types.ts";
 
-/** Sag panelin kendiliginden kapandigi genislik. */
+/** Detay panelinin kendiliginden kapandigi genislik. */
 const NARROW_BREAKPOINT = 1150;
-/** Cevap yazisi ekrani iki kolonlu; bunun altinda sag panele yer kalmiyor. */
+/** Cevap yazisi ekrani iki kolonlu; bunun altinda detay paneline yer kalmiyor. */
 const REPLY_BREAKPOINT = 1400;
 
 export interface DocumentContext {
@@ -22,15 +22,19 @@ export interface DocumentContext {
 export const useDocumentContext = () => useOutletContext<DocumentContext>();
 
 /**
- * Evrak ekranlarinin cercevesi: baslik serisi, sag detay paneli ve icerik.
+ * Evrak ekranlarinin cercevesi: ust bar, detay paneli ve calisma alani.
  *
- * Sohbet ile cevap yazisi AYRI ROTALARDIR ama ayni cerceveyi paylasir; boylece
- * "← Sohbete dön" gercek bir geri gidistir ve dogrudan .../reply ile acilan bir
- * baglanti da dogru ekrani gosterir.
+ * Sohbet ile cevap yazisi AYRI ROTALARDIR ama ayni cerceveyi paylasir; dogrudan
+ * .../reply ile acilan bir baglanti da dogru ekrani gosterir.
+ *
+ * Evrakin kimligi (baslik, dosya adi, durum) ve iki gorunum arasindaki gecis
+ * UST BARDA DEGIL, calisma alaninin kendi baslik blogunda durur: ust bar
+ * sistemin bolumlerini gosterir, bu blok "hangi evrakla calisiyorum"u. Gecis de
+ * bir dugme degil sekme — cevap yazisi, sohbetten cikilan bir yer degil ayni
+ * evrakin ikinci gorunumu.
  */
 export function DocumentLayout() {
   const { docId = "" } = useParams<{ docId: string }>();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const onReply = useLocation().pathname.endsWith("/reply");
   const sessionId = useMemo(() => crypto.randomUUID(), [docId]);
@@ -50,8 +54,6 @@ export function DocumentLayout() {
    */
   useEffect(() => {
     if (!docId) return;
-    // Servis ekranindan "Asistan"a donuldugunde bu evraga geri gelinsin.
-    rememberLastDocument(docId);
     void api
       .markOpened(docId)
       .then(() => qc.invalidateQueries({ queryKey: ["archive"] }))
@@ -81,56 +83,42 @@ export function DocumentLayout() {
     <>
       <header className="flex h-[60px] flex-[0_0_60px] items-center gap-3 border-b border-cizgi bg-white px-5">
         <HeaderNav />
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          {onReply && (
-            <button
-              type="button"
-              onClick={() => navigate(`/documents/${docId}`)}
-              className="flex items-center gap-1.5 rounded-lg border border-cizgi-2 bg-white py-1.5 pr-[11px] pl-[9px] text-[12.5px] font-semibold whitespace-nowrap transition-colors hover:border-cizgi-5"
-            >
-              ← Sohbete dön
-            </button>
-          )}
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold tracking-[-.01em]">
-              {doc.konu ?? doc.filename}
-            </div>
-            <div className="mt-px truncate text-[11.5px] text-silik">{doc.filename}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {doc.containsPII && (
-            <span className="rounded-md border border-uyari-cizgi bg-uyari-zemin-2 px-2 py-1 font-mono text-[10.5px] text-uyari">
-              KVKK
-            </span>
-          )}
-          <StatusChip doc={doc} />
-          {!onReply && (
-            <button
-              type="button"
-              onClick={() => navigate(`/documents/${docId}/reply`)}
-              className="rounded-[9px] bg-gib px-3.5 py-2 text-[12.5px] font-semibold whitespace-nowrap text-white transition-colors hover:bg-gib-koyu"
-            >
-              Cevap yazısı
-            </button>
-          )}
-          <button
-            type="button"
-            title="Belge detayları"
-            onClick={() => setPanelOpen((open) => !open)}
-            className={`flex items-center gap-1.5 rounded-[9px] border border-cizgi-2 px-3 py-2 text-govde transition-colors hover:border-cizgi-5 ${
-              panelOpen ? "bg-yuzey" : "bg-white"
-            }`}
-          >
-            <span className="text-sm leading-none">⚙</span>
-            <span className="text-[12.5px] font-semibold">Detay</span>
-          </button>
-        </div>
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-x-auto">
+        {/* Panel SOLDA: sol serit → dayanaklar → konusma. */}
+        <DetailPanel
+          doc={doc}
+          open={panelOpen}
+          onOpen={() => setPanelOpen(true)}
+          onClose={() => setPanelOpen(false)}
+        />
         <div className="flex min-w-[440px] flex-1 flex-col">
+          {/* Calisma alani basligi: sohbette de cevap yazisinda da sabit kalir,
+              yalnizca altindaki icerik degisir. Beyaz zemin ve alt cizgi, bu
+              blogu gri sohbet akisindan ayirir. */}
+          <div className="flex-[0_0_auto] border-b border-cizgi bg-white px-7 pt-[18px]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-[16px] leading-tight font-semibold tracking-[-.01em]">
+                  {doc.konu ?? doc.filename}
+                </div>
+                <div className="mt-1 truncate text-[11.5px] text-silik">{doc.filename}</div>
+              </div>
+              <StatusChip doc={doc} />
+            </div>
+            {/* -mb-px: sekmenin 2px'lik alt cizgisi blogun kendi cizgisinin
+                uzerine otursun, altinda ikinci bir cizgi olusmasin. */}
+            <div className="-mb-px flex gap-5 pt-3.5">
+              <WorkspaceTab to={`/documents/${docId}`} active={!onReply}>
+                Asistan
+              </WorkspaceTab>
+              <WorkspaceTab to={`/documents/${docId}/reply`} active={onReply}>
+                Cevap yazısı
+              </WorkspaceTab>
+            </div>
+          </div>
+
           {/*
            * key={docId}: baska bir evraga gecildiginde ROTA AYNI kaldigi icin
            * (/documents/:docId) React alttaki ekrani yeniden kullanirdi ve
@@ -144,8 +132,29 @@ export function DocumentLayout() {
             context={{ doc, chat: data.chat, sessionId } satisfies DocumentContext}
           />
         </div>
-        {panelOpen && <RightPanel doc={doc} onClose={() => setPanelOpen(false)} />}
       </div>
     </>
+  );
+}
+
+/** Calisma alani sekmesi — ust bardaki nav baglantilariyla ayni dil. */
+function WorkspaceTab({
+  to,
+  active,
+  children,
+}: {
+  to: string;
+  active: boolean;
+  children: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className={`border-b-2 pb-2 text-[13px] font-semibold whitespace-nowrap transition-colors ${
+        active ? "border-gib text-metin" : "border-transparent text-ikincil hover:text-metin"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }

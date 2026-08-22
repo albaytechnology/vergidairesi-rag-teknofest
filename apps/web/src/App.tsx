@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Sidebar } from "./shell/Sidebar.tsx";
 import { DocumentLayout } from "./shell/DocumentLayout.tsx";
-import { HomeView } from "./views/HomeView.tsx";
+import { UploadView } from "./views/UploadView.tsx";
+import { ArchiveView } from "./views/ArchiveView.tsx";
 import { ChatView } from "./views/ChatView.tsx";
 import { ReplyView } from "./views/ReplyView.tsx";
 import { ServicesView } from "./views/ServicesView.tsx";
@@ -16,12 +17,15 @@ import { ServiceDetailView } from "./views/ServiceDetailView.tsx";
  * sekme degistirmiyor.
  *
  * Cevap yazisi AYRI bir rotadir; boylece dogrudan paylasilan bir baglanti da
- * dogru ekrani acar ve "← Sohbete dön" gercek bir geri gidistir.
+ * dogru ekrani acar ve iki gorunum arasindaki sekme gecisi tarayicinin geri
+ * tusuyla da calisir.
  *
- * Servis dagilimi (/services) kabuktan cikmaz, header'daki segmented nav'in
- * ikinci gorunumudur: sol serit ve header yerinde kalir. "Hangi servise ne
- * dustu" sorusu evrak bazli gecmisten turetilemez — havuz gorunumu bu yuzden
- * geri getirildi, ama ayri bir sayfa olarak degil.
+ * Gorunumlerin hicbiri kabuktan cikmaz: sol serit ve header her ekranda
+ * yerinde kalir, yalnizca orta alan degisir.
+ *
+ * Acilis SERVISLER ekranidir. Isin baslangici "hangi servise ne dustu"
+ * sorusudur; bos bir sohbet ekrani ya da yukleme formu, calisani her aciliste
+ * bir sonraki adimi kendi bulmaya birakiyordu.
  *
  * Yol adlari Ingilizce; Turkce adli eski yollar yonlendirmeyle korunur.
  */
@@ -31,7 +35,9 @@ export function App() {
       <Sidebar />
       <main className="flex min-w-0 flex-1 flex-col bg-zemin">
         <Routes>
-          <Route path="/" element={<HomeView />} />
+          <Route path="/" element={<Navigate to="/services" replace />} />
+          <Route path="/upload" element={<UploadView />} />
+          <Route path="/archive" element={<ArchiveView />} />
           <Route path="/documents/:docId" element={<DocumentLayout />}>
             <Route index element={<ChatView />} />
             <Route path="reply" element={<ReplyView />} />
@@ -46,9 +52,8 @@ export function App() {
           <Route path="/servisler" element={<Navigate to="/services" replace />} />
           <Route path="/servisler/:serviceName" element={<LegacyServicePath />} />
           <Route path="/queue/:serviceName" element={<LegacyServicePath />} />
-          <Route path="/arsiv" element={<Navigate to="/" replace />} />
-          <Route path="/evrak-ekle" element={<Navigate to="/" replace />} />
-          <Route path="/upload" element={<Navigate to="/" replace />} />
+          <Route path="/arsiv" element={<Navigate to="/archive" replace />} />
+          <Route path="/evrak-ekle" element={<Navigate to="/upload" replace />} />
 
           <Route
             path="*"

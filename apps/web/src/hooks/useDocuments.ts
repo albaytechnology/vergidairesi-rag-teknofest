@@ -3,7 +3,7 @@ import { api } from "../api/client.ts";
 import type { DocumentSummary } from "../api/types.ts";
 
 /**
- * Sol seritteki sohbet gecmisi ve ana ekrandaki oneriler.
+ * Sol serit ve Arsiv tablosunun ortak veri kaynagi.
  *
  * Tasarimdaki `interacted` bayraginin sunucudaki karsiligi
  * lifecycle_status = 'in_progress' — yani "calisan belgeyi acti" isareti
@@ -19,7 +19,7 @@ export interface DocumentBuckets {
   inProgress: DocumentSummary[];
   /** Cevap yazisi disari alinmis evrak — sol seridin alt grubu. */
   answered: DocumentSummary[];
-  /** Henuz acilmamis evrak — ana ekrandaki oneri kartlari. */
+  /** Henuz hic acilmamis, cevap bekleyen evrak — Arsiv tablosunda gorunur. */
   suggestions: DocumentSummary[];
   isLoading: boolean;
   error: unknown;

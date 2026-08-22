@@ -1,4 +1,4 @@
-import { Link, useMatch, useNavigate } from "react-router-dom";
+import { Link, useMatch } from "react-router-dom";
 import { documentTitle, useDocuments } from "../hooks/useDocuments.ts";
 import type { DocumentSummary } from "../api/types.ts";
 
@@ -13,16 +13,17 @@ const USER = { name: "M. Kaya", initials: "MK", office: "İzmir Vergi Dairesi" }
 /**
  * Sol serit — her ekranda sabit.
  *
- * Yalnizca ETKILESIME GIRILMIS evrak listelenir (bkz. useDocuments): burasi bir
- * evrak havuzu degil sohbet gecmisidir; tum evraki dokmek gecmisi kullanilamaz
- * hale getirirdi. Acilmamis evrak ana ekranda oneri karti olarak durur.
+ * Yalnizca CEVAP BEKLEYEN ve uzerinde calisilmis evrak listelenir (bkz.
+ * useDocuments): burasi bir evrak havuzu degil, elde duran isin listesidir.
+ * Cevaplanan evrak buradan dusuyor — kapanmis islerin listesi Arsiv'de, kendi
+ * arama ve filtreleriyle duruyor; ikisini yan yana tutmak seridi surekli
+ * buyuyen ve hicbir zaman kisalmayan bir yigina cevirmisti.
  */
 export function Sidebar() {
   // Serit rotalarin DISINDA duruyor (her ekranda sabit), bu yuzden aktif evrak
   // useParams ile degil yolun kendisiyle bulunur.
   const docId = useMatch("/documents/:docId/*")?.params.docId;
-  const navigate = useNavigate();
-  const { inProgress, answered } = useDocuments();
+  const { inProgress } = useDocuments();
 
   return (
     <aside className="flex w-[272px] flex-[0_0_272px] flex-col border-r border-cizgi bg-panel">
@@ -46,32 +47,12 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="px-3.5 pt-3.5 pb-2">
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          className="flex w-full items-center gap-[9px] rounded-[10px] border border-cizgi-2 bg-white px-3 py-2.5 text-left text-[13.5px] font-semibold transition-colors hover:border-gib hover:bg-gib-sis"
-        >
-          <span className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px] bg-gib-acik text-[13px] font-bold text-gib">
-            +
-          </span>
-          Yeni sohbet
-        </button>
-      </div>
-
       <div className="flex-1 overflow-y-auto px-2.5 pt-1.5 pb-4">
-        <GroupHeader color="bg-gib" label="Cevap bekleyen" count={inProgress.length} first />
+        <GroupHeader label="Cevap bekleyen" count={inProgress.length} />
         <DocumentList
           documents={inProgress}
           activeId={docId}
-          emptyText="Açtığınız evrak burada birikir."
-        />
-
-        <GroupHeader color="bg-cizgi-5" label="Cevaplanan" count={answered.length} />
-        <DocumentList
-          documents={answered}
-          activeId={docId}
-          emptyText="Henüz cevap yazısı üretilmedi."
+          emptyText="Açtığınız evrak burada birikir; servis havuzlarından bir evrak seçin."
         />
       </div>
 
@@ -94,20 +75,10 @@ export function Sidebar() {
   );
 }
 
-function GroupHeader({
-  color,
-  label,
-  count,
-  first = false,
-}: {
-  color: string;
-  label: string;
-  count: number;
-  first?: boolean;
-}) {
+function GroupHeader({ label, count }: { label: string; count: number }) {
   return (
-    <div className={`flex items-center gap-[7px] px-2 pb-1.5 ${first ? "pt-3" : "pt-[18px]"}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
+    <div className="flex items-center gap-[7px] px-2 pt-3 pb-1.5">
+      <span className="h-1.5 w-1.5 rounded-full bg-gib" />
       <span className="text-[10.5px] font-semibold tracking-[.09em] text-silik uppercase">
         {label}
       </span>

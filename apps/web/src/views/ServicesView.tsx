@@ -26,24 +26,39 @@ export function ServicesView() {
   // = bekleyen evrak; iki tarafin ayrisabilecegi bir aralik kalmasin.
   const pending =
     services.reduce((t, s) => t + s.bekleyen, 0) + (data?.belirlenemedi ?? 0);
-  const completed = services.reduce((t, s) => t + s.tamamlanan, 0);
 
   return (
     <>
       <header className="flex h-[60px] flex-[0_0_60px] items-center gap-3 border-b border-cizgi bg-white px-5">
         <HeaderNav />
-        <span className="truncate text-[13px] text-silik">
-          Yönetmelik hiyerarşisine göre servis havuzları
-        </span>
       </header>
 
       <div className="flex-1 overflow-y-auto px-7 pt-8 pb-14">
         <div className="mx-auto w-full max-w-[1080px] animate-yukse">
           <h1 className="m-0 text-[22px] font-bold tracking-[-.01em]">Vergi Dairesi Servisleri</h1>
-          <p className="mt-1 text-[12.5px] text-silik">
-            {pending} evrak cevap bekliyor
-            {completed > 0 && ` · ${completed} cevaplandı`} · {services.length} servis
+          <p className="mt-1.5 max-w-[620px] text-[12.5px] leading-[1.6] text-pretty text-silik">
+            Gelen evrak, Vergi Daireleri Kuruluş ve Görev Yönetmeliği’ndeki görev tanımlarına
+            (madde 11) göre ilgili servise yönlendirilir; her kartta o servisin madde numarası ve
+            bekleyen evrak sayısı görünür.
           </p>
+
+          {/*
+           * Tek sayac: BEKLEYEN EVRAK. "Cevaplanan", "aktif servis", "son evrak"
+           * kartlari kaldirildi — hicbiri bir sonraki adimi degistirmiyordu ve
+           * ekranin ust yarisini, is bekleyen havuzlardan once dolduruyorlardi.
+           * Cevaplanan evrakin yeri Arsiv.
+           */}
+          <div className="mt-5 inline-flex min-w-[220px] flex-col rounded-xl border border-cizgi bg-white px-5 py-4">
+            <span className="text-[10.5px] font-semibold tracking-[.09em] text-silik uppercase">
+              Bekleyen evrak
+            </span>
+            <span className="mt-1.5 text-[28px] leading-none font-bold tabular-nums">
+              {isLoading ? "—" : pending}
+            </span>
+            <span className="mt-1.5 text-[11.5px] text-silik">
+              cevap yazısı üretilmemiş evrak · {services.length} servis
+            </span>
+          </div>
 
           {/* Yonlendirilemeyen evrak bir hata degil, elle bakilacak bir is: havuzlarin
               arasina karismasin diye ustte ayri duruyor. */}
@@ -65,7 +80,7 @@ export function ServicesView() {
             groupByUnit(services).map(([unit, group], i) => (
               <section key={unit} className={i === 0 ? "mt-7" : "mt-9"}>
                 <div className="border-l-[3px] border-gib pl-3">
-                  <h2 className="m-0 text-[15px] font-bold">{unit}</h2>
+                  <h2 className="m-0 text-[15px] font-bold">{UNIT_LABEL[unit] ?? unit}</h2>
                   {UNIT_DESCRIPTION[unit] && (
                     <p className="mt-0.5 text-xs text-silik">{UNIT_DESCRIPTION[unit]}</p>
                   )}
@@ -105,12 +120,10 @@ function ServiceCard({ service }: { service: ServiceRow }) {
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-2">
         <span className="font-mono text-[10.5px] text-soluk">Madde {service.maddeNo}</span>
+        {/* Durum metni yalnizca bekleyen ise bakar; "N cevaplandi" bilgisi
+            Arsiv'in isi — kart, elde is olup olmadigini soylemeli. */}
         <span className="text-[11px] text-silik">
-          {service.tamamlanan > 0
-            ? `${service.tamamlanan} cevaplandı`
-            : hasPending
-              ? "cevap bekliyor"
-              : "Bekleyen evrak yok"}
+          {hasPending ? "cevap bekliyor" : "Bekleyen evrak yok"}
         </span>
       </div>
     </Link>
@@ -131,6 +144,17 @@ function Skeleton() {
 const UNIT_DESCRIPTION: Record<string, string> = {
   "Ana Hizmet Birimleri": "Vergilendirme, Muhasebe, Kovuşturma, Tarama ve Kontrol bölümleri",
   "Diğer Hizmet Birimleri": "Başkanlığa bağlı destek ve ihtisas servisleri",
+};
+
+/**
+ * Grup basligi ekranda okunur adiyla gecer.
+ *
+ * Yonetmelikteki "Ana Hizmet Birimleri" ibaresi bir ic siniflandirma; ekranda
+ * bunlarin ne oldugunu soylemiyor. Yalnizca ETIKET degisiyor — gruplama yine
+ * /api/services'ten, yani yonetmelik metadata'sindan turuyor.
+ */
+const UNIT_LABEL: Record<string, string> = {
+  "Ana Hizmet Birimleri": "Vergi Dairesi Servisleri",
 };
 
 /** Ana hizmet birimleri once; geri kalanlar alfabetik. */

@@ -1,65 +1,45 @@
-import { Link, useMatch } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 /**
- * Header'in sol ucundaki "Asistan / Servisler" segmented navigasyonu.
+ * Header'in sol ucundaki ana navigasyon.
  *
- * Servis dagilimi ayri bir sayfa degil, ayni kabugun ikinci gorunumudur: sol
- * serit ve header yerinde kalir, yalnizca orta alan degisir. Bu yuzden nav bir
- * ust cerceveye degil her ekranin header'ina konur.
- */
-
-/**
- * Son acilan evrak.
+ * Duz metin baglantilar (aktif olanin altinda kirmizi cizgi) — segmented pill
+ * yerine: sekme sayisi ikiden dorde cikinca pill'ler header'in yarisini
+ * kapliyordu ve evrak basligina yer kalmiyordu. Nav bir ust cerceveye degil her
+ * ekranin header'ina konur; boylece servis/arsiv gorunumleri de ayni kabugun
+ * icinde kalir.
  *
- * "Asistan" sekmesi, servis ekranindayken calisilan evraga geri donmeli; ama o
- * evrak URL'de artik yok. Sunucudaki lifecycle_status "hangi evraklar acildi"
- * sorusunu cevapliyor, "en son hangisi" sorusunu cevaplamiyor — bu tamamen
- * sekmeye ozel bir gezinme durumu oldugu icin sessionStorage'da tutuluyor.
+ * Acik evraga donen bir sekme YOK: evrakin kendi calisma alani kendi basligini
+ * ve sekmelerini tasiyor (bkz. DocumentLayout). Ust bar yalnizca sistemin ana
+ * bolumlerini gosterir.
  */
-const LAST_DOCUMENT_KEY = "alb:last-document";
-
-export function rememberLastDocument(docId: string): void {
-  try {
-    sessionStorage.setItem(LAST_DOCUMENT_KEY, docId);
-  } catch {
-    /* Gizli sekmede yazilamayabilir; nav yalnizca ana ekrana doner. */
-  }
-}
-
-function lastDocument(): string | null {
-  try {
-    return sessionStorage.getItem(LAST_DOCUMENT_KEY);
-  } catch {
-    return null;
-  }
-}
 
 export function HeaderNav() {
-  // Acik evrak once yoldan okunur; yol evrak disi bir ekrandaysa hatirlanana duser.
-  const activeDocument = useMatch("/documents/:docId/*")?.params.docId ?? lastDocument();
-  const onServices = Boolean(useMatch("/services/*"));
+  const path = useLocation().pathname;
 
   return (
-    <>
-      <div className="flex shrink-0 gap-0.5 rounded-[9px] bg-yuzey p-[3px]">
-        <Tab to={activeDocument ? `/documents/${activeDocument}` : "/"} active={!onServices}>
-          Asistan
-        </Tab>
-        <Tab to="/services" active={onServices}>
-          Servisler
-        </Tab>
-      </div>
-      <span className="h-6 w-px shrink-0 bg-cizgi" />
-    </>
+    <nav className="flex shrink-0 items-center gap-5">
+      <NavLink to="/services" active={path.startsWith("/services")}>
+        Servisler
+      </NavLink>
+      <NavLink to="/upload" active={path.startsWith("/upload")}>
+        Evrak ekle
+      </NavLink>
+      <NavLink to="/archive" active={path.startsWith("/archive")}>
+        Arşiv
+      </NavLink>
+    </nav>
   );
 }
 
-function Tab({ to, active, children }: { to: string; active: boolean; children: string }) {
+function NavLink({ to, active, children }: { to: string; active: boolean; children: string }) {
   return (
     <Link
       to={to}
-      className={`rounded-[7px] px-[13px] py-1.5 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
-        active ? "bg-white text-metin shadow-sekme" : "text-ikincil hover:text-metin"
+      // Alt cizgi her durumda yer kaplar (saydam), aktiflik yalnizca rengini
+      // degistirir: aksi halde sekmeler aktiflige gore 2px zipliyordu.
+      className={`border-b-2 pb-0.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${
+        active ? "border-gib text-metin" : "border-transparent text-ikincil hover:text-metin"
       }`}
     >
       {children}
