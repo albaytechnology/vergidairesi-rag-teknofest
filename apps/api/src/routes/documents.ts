@@ -175,7 +175,7 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
         await pool.query(
           `UPDATE documents SET routed_service = $2, routing_reasoning = $3,
              routing_confidence = 1, routing_status = 'routed', routed_at = now(),
-             updated_at = now()
+             routing_source = 'manuel', updated_at = now()
            WHERE id = $1`,
           [doc.id, req.body.servis, req.body.gerekce ?? "Servis calisani tarafindan elle atandi"],
         );
@@ -229,6 +229,8 @@ function toSummary(d: NonNullable<Detay>) {
        * digerinden sapmasi demekti.
        */
       mahkemeYazismasi: isDisputeService(d.routed_service),
+      /** Servisi kim atadi: "llm" (model) | "manuel" (calisan). Hic atanmadiysa null. */
+      kaynak: d.routing_source,
     },
     /** Is akisi durumu — parse durumundan (status) ayridir. */
     yasamDongusu: d.lifecycle_status,

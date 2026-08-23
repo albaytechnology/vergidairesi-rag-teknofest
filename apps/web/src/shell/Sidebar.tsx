@@ -8,7 +8,7 @@ import type { DocumentSummary } from "../api/types.ts";
  * YER TUTUCU: projede henuz kimlik dogrulama yok. Buraya bakan tek yer burasi
  * oldugu icin, oturum eklendiginde yalnizca bu sabit degistirilecek.
  */
-const USER = { name: "M. Kaya", initials: "MK", office: "İzmir Vergi Dairesi" };
+const USER = { name: "Elif Aycıl", initials: "EA", office: "Afyonkarahisar Vergi Dairesi" };
 
 /**
  * Sol serit — her ekranda sabit.

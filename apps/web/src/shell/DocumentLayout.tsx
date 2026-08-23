@@ -9,8 +9,6 @@ import type { ChatMessage, DocumentSummary } from "../api/types.ts";
 
 /** Detay panelinin kendiliginden kapandigi genislik. */
 const NARROW_BREAKPOINT = 1150;
-/** Cevap yazisi ekrani iki kolonlu; bunun altinda detay paneline yer kalmiyor. */
-const REPLY_BREAKPOINT = 1400;
 
 export interface DocumentContext {
   doc: DocumentSummary & { path: string };
@@ -69,8 +67,15 @@ export function DocumentLayout() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  /*
+   * Cevap yazisina gecerken detay panelini kapat.
+   *
+   * O ekran zaten iki kolonlu (karar formu + onizleme) ve yazinin kagit
+   * genisliginde gorunmesi gerekiyor; ucuncu bir kolon onizlemeyi eziyordu.
+   * Panel kapali kalir, calisan gerekirse serit uzerinden yeniden acar.
+   */
   useEffect(() => {
-    if (onReply && window.innerWidth < REPLY_BREAKPOINT) setPanelOpen(false);
+    if (onReply) setPanelOpen(false);
   }, [onReply]);
 
   if (isLoading) return <Loading what="Belge yükleniyor" />;

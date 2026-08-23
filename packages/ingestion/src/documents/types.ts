@@ -36,6 +36,8 @@ export interface DocumentDetail extends DocumentRow {
   routing_reasoning: string | null;
   routing_regulation_refs: { maddeNo: string; baslik: string }[] | null;
   routing_status: string;
+  /** Yonlendirmeyi kim yapti: 'llm' | 'manuel'. Hic yonlendirilmediyse null. */
+  routing_source: "llm" | "manuel" | null;
   /** Eksik bilgi taramasinin bulgulari; null ise evrak hic taranmadi. */
   gap_findings: DocumentGap[] | null;
   gaps_scanned_at: string | null;

@@ -61,6 +61,8 @@ export interface DocumentSummary {
     durum: string;
     /** true: cevap yazısı mükellefe değil Vergi Mahkemesi Başkanlığı'na yazılır. */
     mahkemeYazismasi: boolean;
+    /** Servisi kim atadı: "llm" (model) · "manuel" (çalışan). Hiç atanmadıysa null. */
+    kaynak: "llm" | "manuel" | null;
   };
   yasamDongusu: LifecycleStatus;
   tamamlanmaTarihi: string | null;

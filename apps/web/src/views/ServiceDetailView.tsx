@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client.ts";
-import { ArticleChip, ErrorBox, StatusChip } from "../components/ui.tsx";
+import { ArticleChip, ErrorBox, StatusChip, maddeLabel } from "../components/ui.tsx";
 import { HeaderNav } from "../shell/HeaderNav.tsx";
 import { documentTitle } from "../hooks/useDocuments.ts";
 
@@ -90,7 +90,7 @@ export function ServiceDetailView() {
                           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                             {d.routing.maddeler.map((m) => (
                               <ArticleChip key={m.maddeNo}>
-                                <span title={m.baslik}>M.{m.maddeNo}</span>
+                                <span title={m.baslik}>{maddeLabel(m.maddeNo)}</span>
                               </ArticleChip>
                             ))}
                           </div>

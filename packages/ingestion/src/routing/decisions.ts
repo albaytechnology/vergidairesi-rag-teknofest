@@ -51,6 +51,8 @@ export async function saveRoutingDecision(
        routed_birim = $2, routed_service = $3, routing_confidence = $4,
        routing_reasoning = $5, routing_regulation_refs = $6, routing_status = $7,
        routing_key = COALESCE($8, routing_key),
+       -- Bu yol HER ZAMAN modelin karari; elle atama ayri bir uctan yaziliyor.
+       routing_source = 'llm',
        routed_at = now(), updated_at = now(),
        -- Yasam dongusu yalnizca ILERI gider: uzerinde calisilmis ya da
        -- cevaplanmis bir evrak yeniden yonlendirilirse 'routed'a dusmemeli.

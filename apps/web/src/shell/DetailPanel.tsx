@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client.ts";
-import { ArticleChip, SectionLabel, WarningBox } from "../components/ui.tsx";
+import { Expandable, SectionLabel, WarningBox } from "../components/ui.tsx";
+import { RoutingDialog } from "./RoutingDialog.tsx";
 import type { DocumentGap, DocumentSummary } from "../api/types.ts";
 
 /**
@@ -89,35 +88,21 @@ export function DetailPanel({
             </button>
           </div>
 
-          {/* Once evrakin kimligi (etiketler + dosya adi), sonra ozeti: panel bir
-              belgenin yaninda duruyor, hangi belge oldugu en ustte yazmali.
-              KVKK rozeti ust bardan buraya tasindi: kisisel veri uyarisi
-              belgenin bir ozelligi, calisma alaninin degil. */}
-          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-            {doc.docType && (
-              <span className="rounded-[5px] border border-gib-cizgi bg-gib-acik px-[7px] py-[3px] text-[10.5px] font-semibold text-gib">
-                {docTypeLabel(doc.docType)}
-              </span>
-            )}
-            {doc.containsPII && (
-              <span
-                title="Belge kişisel veri içeriyor"
-                className="rounded-[5px] border border-uyari-cizgi bg-uyari-zemin-2 px-[7px] py-[3px] font-mono text-[10.5px] text-uyari"
-              >
-                KVKK
-              </span>
-            )}
-          </div>
-          <div className="mb-4 truncate text-[11px] text-silik">{doc.filename}</div>
+          {/* Yonlendirme ozetten ONCE: calisanin ilk sorusu "bu evrak bana mi
+              ait?" — ozet ancak bu cevaplandiktan sonra okunuyor. */}
+          <RoutingCard doc={doc} />
 
           <SectionLabel>Özet</SectionLabel>
-          <p className="mt-2 mb-6 text-[12.5px] leading-[1.65] text-pretty text-govde">
-            {doc.ozet ?? "Bu evrak için özet üretilmemiş."}
-          </p>
+          <div className="mt-2 mb-6">
+            <Expandable maxHeight={132}>
+              <p className="text-[12.5px] leading-[1.65] text-pretty text-govde">
+                {doc.ozet ?? "Bu evrak için özet üretilmemiş."}
+              </p>
+            </Expandable>
+          </div>
 
-          <ExtractedInfo entities={doc.entities} />
+          <ExtractedInfo doc={doc} />
           <GapsCard gaps={doc.eksikler} />
-          <RoutingCard doc={doc} />
 
           <SectionLabel>Kaynak belge</SectionLabel>
           <div className="mt-2.5 overflow-hidden rounded-xl border border-cizgi bg-yuzey">
@@ -144,7 +129,8 @@ export function DetailPanel({
   );
 }
 
-function ExtractedInfo({ entities }: { entities: DocumentSummary["entities"] }) {
+function ExtractedInfo({ doc }: { doc: DocumentSummary }) {
+  const entities = doc.entities;
   const rows: [string, string][] = [
     ["Kişi", joinValues(entities?.kisiKurumlar)],
     ["Tutar", joinValues(entities?.tutarlar)],
@@ -156,31 +142,61 @@ function ExtractedInfo({ entities }: { entities: DocumentSummary["entities"] }) 
   return (
     <>
       <SectionLabel>Çıkarılan bilgiler</SectionLabel>
-      <div className="mt-2.5 mb-2 grid grid-cols-[82px_1fr] gap-x-3 gap-y-2 text-[12.5px]">
-        {taxId && (
-          <>
-            <span className="text-silik">{entities?.vkn ? "VKN" : "TCKN"}</span>
-            <span className="font-mono text-[11.5px] text-metin-2">{taxId}</span>
-          </>
-        )}
-        {rows.map(([label, value]) => (
-          <div key={label} className="contents">
-            <span className="text-silik">{label}</span>
-            <span
-              className={`text-metin-2 ${label === "Tutar" ? "font-mono text-[11.5px]" : ""}`}
-            >
-              {value}
+
+      {/* Evrak tipi ve KVKK rozetleri bu bolumun icinde: ikisi de belgeden
+          OKUNAN bilgi — biri turu, digeri kisisel veri tasidigi. Panelin en
+          ustunde ayri durduklarinda, cikarilan diger alanlardan kopuk iki
+          etiket gibi gorunuyorlardi. */}
+      {(doc.docType || doc.containsPII) && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {doc.docType && (
+            <span className="rounded-[5px] border border-gib-cizgi bg-gib-acik px-[7px] py-[3px] text-[10.5px] font-semibold text-gib">
+              {docTypeLabel(doc.docType)}
             </span>
+          )}
+          {doc.containsPII && (
+            <span
+              title="Belge kişisel veri içeriyor"
+              className="rounded-[5px] border border-uyari-cizgi bg-uyari-zemin-2 px-[7px] py-[3px] font-mono text-[10.5px] text-uyari"
+            >
+              KVKK
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="mt-2.5 mb-6">
+        <Expandable maxHeight={150}>
+          <div className="grid grid-cols-[82px_1fr] gap-x-3 gap-y-2 text-[12.5px]">
+            {taxId && (
+              <>
+                <span className="text-silik">{entities?.vkn ? "VKN" : "TCKN"}</span>
+                <span className="font-mono text-[11.5px] text-metin-2">{taxId}</span>
+              </>
+            )}
+            {rows.map(([label, value]) => (
+              <div key={label} className="contents">
+                <span className="text-silik">{label}</span>
+                <span
+                  className={`text-metin-2 ${label === "Tutar" ? "font-mono text-[11.5px]" : ""}`}
+                >
+                  {value}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="mb-6">
-        {/* Bos birakilmasi bilincli: checksum'dan gecmeyen numara yazilmiyor. */}
-        {!taxId && (
-          <WarningBox>
-            Doğrulanmış VKN/TCKN bulunamadı — checksum’dan geçmeyen numara yazılmaz.
-          </WarningBox>
-        )}
+
+          {/* Numara alani bos birakilmasi bilincli: checksum'dan gecmeyen numara
+              yazilmiyor. Uyari bolumun sonunda, tam genislikte durur ve
+              kirpilabilir govdenin bir parcasidir. */}
+          {!taxId && (
+            <div className="mt-3">
+              <WarningBox>
+                Doğrulanmış VKN/TCKN bulunamadı — checksum’dan geçmeyen numara yazılmaz.
+              </WarningBox>
+            </div>
+          )}
+        </Expandable>
       </div>
     </>
   );
@@ -211,7 +227,13 @@ function GapsCard({ gaps }: { gaps: DocumentGap[] | null }) {
             Belgede eksik ya da çelişkili bir bilgi bulunamadı.
           </p>
         ) : (
-          gaps.map((b, i) => <GapRow key={i} gap={b} />)
+          <Expandable maxHeight={230}>
+            <div className="space-y-2">
+              {gaps.map((b, i) => (
+                <GapRow key={i} gap={b} />
+              ))}
+            </div>
+          </Expandable>
         )}
       </div>
     </>
@@ -256,112 +278,47 @@ function GapRow({ gap }: { gap: DocumentGap }) {
 }
 
 /**
- * Yonlendirme karti.
+ * Yonlendirme karti — kararin kendisi, tek satirda.
  *
- * "Elle ata" ve "Yeniden hesapla" bilerek yan yana: son sozu insan soyler ama
- * modelin kararini tazelemek de tek tikla mumkun olmali (bkz. /reroute).
+ * Kart TIKLANABILIR: gerekce, dayanak maddeler ve servisi degistirme islemleri
+ * pencerede (RoutingDialog). Panelde yalnizca KARAR duruyor; birim adi, gerekce
+ * ozeti ve madde rozetleri kartta uc satir daha kapliyordu ve hicbiri bir
+ * sonraki adimi degistirmiyor — hepsi bir tik otede, sorulunca okunacak yerde.
  */
+const ATAMA_METNI: Record<"llm" | "manuel" | "yok", string> = {
+  llm: "Yapay zekâ tarafından atandı",
+  manuel: "Servis çalışanı tarafından elle atandı",
+  yok: "Henüz bir servise atanmadı",
+};
+
 function RoutingCard({ doc }: { doc: DocumentSummary }) {
-  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [service, setService] = useState(doc.routing.servis ?? "");
-
-  const { data: catalog } = useQuery({
-    queryKey: ["services"],
-    queryFn: api.services,
-    enabled: open,
-  });
-
-  const reroute = useMutation({
-    mutationFn: (target?: string) => api.reroute(doc.id, target),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["document", doc.id] });
-      void qc.invalidateQueries({ queryKey: ["archive"] });
-      setOpen(false);
-    },
-  });
 
   return (
     <>
       <SectionLabel>Yönlendirme</SectionLabel>
-      <div className="mt-2.5 mb-6 rounded-xl border border-cizgi bg-panel p-3.5">
-        <div className="text-[13px] leading-[1.4] font-semibold">
-          {doc.routing.servis ?? "Belirlenemedi — manuel inceleme gerekli"}
-        </div>
-        {doc.routing.birim && (
-          <div className="mt-0.5 text-[11.5px] text-silik">{doc.routing.birim}</div>
-        )}
-        {doc.routing.gerekce && (
-          <p className="mt-2.5 mb-3 text-xs leading-[1.6] text-pretty text-govde">
-            {doc.routing.gerekce}
-          </p>
-        )}
-        {doc.routing.maddeler.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {doc.routing.maddeler.map((m) => (
-              <ArticleChip key={m.maddeNo} tone="outline">
-                <span title={m.baslik}>M.{m.maddeNo}</span>
-              </ArticleChip>
-            ))}
+      {/* Servisi kimin sectigi kararin bir parcasi: modelin onerisi ile
+          calisanin atamasi ayni agirlikta okunmamali. */}
+      <p className="mt-1 text-[11px] text-soluk">{ATAMA_METNI[doc.routing.kaynak ?? "yok"]}</p>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 mb-6 flex w-full items-center gap-2 rounded-xl border border-cizgi bg-panel p-3.5 text-left transition-colors hover:border-cizgi-5"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] leading-[1.4] font-semibold">
+            {doc.routing.servis ?? "Belirlenemedi — manuel inceleme gerekli"}
           </div>
-        )}
-
-        <div className="flex gap-2">
-          <SmallButton onClick={() => setOpen((o) => !o)}>Elle ata</SmallButton>
-          <SmallButton disabled={reroute.isPending} onClick={() => reroute.mutate(undefined)}>
-            {reroute.isPending ? "Hesaplanıyor…" : "Yeniden hesapla"}
-          </SmallButton>
-        </div>
-
-        {open && (
-          <div className="mt-2 flex gap-2">
-            <select
-              value={service}
-              onChange={(e) => setService(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg border border-cizgi-2 bg-white px-2 py-1.5 text-[11.5px] outline-none"
-            >
-              <option value="">Servis seçin…</option>
-              {catalog?.services.map((s) => (
-                <option key={s.servis} value={s.servis}>
-                  {s.servis}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={!service || reroute.isPending}
-              onClick={() => reroute.mutate(service)}
-              className="rounded-lg bg-gib px-2.5 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-50"
-            >
-              Ata
-            </button>
+          <div className="mt-1 text-[11.5px] text-silik">
+            Gerekçeyi görmek ve servisi güncellemek için tıklayın
           </div>
-        )}
-        {reroute.error && (
-          <p className="mt-2 text-[11px] text-uyari">{(reroute.error as Error).message}</p>
-        )}
-      </div>
+        </div>
+        <span aria-hidden className="shrink-0 text-[13px] leading-none text-soluk">
+          ›
+        </span>
+      </button>
+
+      {open && <RoutingDialog doc={doc} onClose={() => setOpen(false)} />}
     </>
-  );
-}
-
-function SmallButton({
-  onClick,
-  disabled = false,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex-1 rounded-lg border border-cizgi-2 bg-white py-[7px] text-xs font-medium text-govde transition-colors hover:border-cizgi-5 disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }
