@@ -8,7 +8,7 @@ import type { DocumentSummary } from "../api/types.ts";
  * Yonlendirme kararinin tam gerekcesi ve degistirilmesi.
  *
  * NEDEN AYRI BIR PENCERE: gerekce modelin yazdigi uzun bir metindir (yonetmelik
- * maddesinin gorev tanimiyla karsilastirma) ve 340px'lik panelde ozeti asagi
+ * maddesinin gorev tanimiyla karsilastirma) ve panelde ozeti asagi
  * itiyordu. Panelde artik yalnizca KARAR duruyor; "neden" sorusu sorulmadan
  * ekranda yer kaplamiyor.
  *
@@ -19,9 +19,11 @@ import type { DocumentSummary } from "../api/types.ts";
  */
 export function RoutingDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => void }) {
   const qc = useQueryClient();
-  /** null: eylemler henuz acilmadi. "manuel" | "ai": secilen yol. */
+  /** null: eylemler henuz acilmadi. "menu": iki yol. "manuel": servis secimi. */
   const [mode, setMode] = useState<null | "menu" | "manuel">(null);
   const [service, setService] = useState(doc.routing.servis ?? "");
+  /** Elle atama onay bekliyor: secilen servis yaziya ve havuza dogrudan etki eder. */
+  const [confirming, setConfirming] = useState(false);
 
   const { data: catalog } = useQuery({
     queryKey: ["services"],
@@ -38,17 +40,21 @@ export function RoutingDialog({ doc, onClose }: { doc: DocumentSummary; onClose:
       // Pencere ACIK kalir: calisan yeni karari ve yeni gerekcesini gorsun —
       // kapanan bir pencere "ne oldu?" sorusunu ekranda birakiyordu.
       setMode(null);
+      setConfirming(false);
     },
   });
 
   // Esc ile kapanma: pencere klavyeden de terk edilebilmeli.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // Onay sorusu acikken Esc once onu geri alir; pencere ayakta kalir.
+      if (confirming) setConfirming(false);
+      else onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, confirming]);
 
   const r = doc.routing;
 
@@ -63,7 +69,7 @@ export function RoutingDialog({ doc, onClose }: { doc: DocumentSummary; onClose:
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-full w-full max-w-[560px] animate-yukse flex-col overflow-hidden rounded-[14px] border border-cizgi bg-white shadow-kart"
+        className="relative flex max-h-full w-full max-w-[560px] animate-yukse flex-col overflow-hidden rounded-[14px] border border-cizgi bg-white shadow-kart"
       >
         <div className="flex items-start justify-between gap-3 border-b border-cizgi-3 px-5 py-4">
           <div className="min-w-0">
@@ -166,7 +172,7 @@ export function RoutingDialog({ doc, onClose }: { doc: DocumentSummary; onClose:
               <button
                 type="button"
                 disabled={!service || reroute.isPending}
-                onClick={() => reroute.mutate(service)}
+                onClick={() => setConfirming(true)}
                 className="rounded-[10px] bg-gib px-4 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-gib-koyu disabled:opacity-50"
               >
                 Ata
@@ -193,6 +199,54 @@ export function RoutingDialog({ doc, onClose }: { doc: DocumentSummary; onClose:
             <p className="mt-2 text-[11px] text-uyari">{(reroute.error as Error).message}</p>
           )}
         </div>
+
+        {/*
+         * Onay katmani.
+         *
+         * Elle atama geri alinabilir ama sessiz degil: evrak baska bir servisin
+         * havuzuna gecer, modelin gerekcesi kayittan silinir ve o servisin
+         * calisani listesinde yeni bir is gorur. Yanlis satira tiklamakla
+         * olacak bir sey olmamali.
+         */}
+        {confirming && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirming(false);
+            }}
+            className="absolute inset-0 z-10 flex items-center justify-center bg-metin/25 px-6"
+          >
+            <div
+              role="alertdialog"
+              aria-label="Servis atamasını onayla"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[380px] animate-yukse rounded-xl border border-cizgi bg-white p-4 shadow-kart"
+            >
+              <div className="text-[13.5px] font-semibold">Servis ataması onayı</div>
+              <p className="mt-1.5 text-[12px] leading-[1.6] text-pretty text-govde">
+                Evrak <strong>{service}</strong> servisine atanacak. Modelin kararı ve gerekçesi
+                bunun yerine <strong>elle atama</strong> kaydıyla değiştirilecek.
+              </p>
+              <div className="mt-3.5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="flex-1 rounded-[10px] border border-cizgi-2 bg-white py-2 text-[12.5px] font-semibold text-govde transition-colors hover:border-cizgi-5"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  disabled={reroute.isPending}
+                  onClick={() => reroute.mutate(service)}
+                  className="flex-1 rounded-[10px] bg-gib py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-gib-koyu disabled:opacity-50"
+                >
+                  {reroute.isPending ? "Atanıyor…" : "Evet, ata"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

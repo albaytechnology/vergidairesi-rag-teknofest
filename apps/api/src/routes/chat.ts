@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   askStream,
   classifyChatIntent,
+  composeLetterReason,
   type ChatEvent,
   type DocumentRecord,
 } from "@albay/agents";
@@ -67,7 +68,23 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       const niyet = await classifyChatIntent(question);
       if (niyet.tur === "cevap_yazisi") {
         sendSse(reply, { type: "trace", message: "niyet: cevap yazisi" });
-        sendSse(reply, { type: "intent", karar: niyet.karar, gerekce: niyet.gerekce });
+
+        /*
+         * Gerekce ayri bir adimda ve KAYDI GOREREK yaziliyor. Siniflandirici
+         * yalnizca mesaji goruyor; "eksik bilgiler isiginda reddet" gibi bir
+         * talepte elde "eksik bilgi sunulmus olmasi" gibi dogru ama bos bir
+         * ibare kaliyordu. Hangi bilgilerin eksik oldugu sistem kaydinda yazili.
+         */
+        const gerekce = doc
+          ? await composeLetterReason({
+              question,
+              karar: niyet.karar,
+              record: toRecord(doc),
+              fallback: niyet.gerekce,
+            })
+          : niyet.gerekce;
+
+        sendSse(reply, { type: "intent", karar: niyet.karar, gerekce });
         /*
          * Gecmise YAZILIR. Onceden yazilmiyordu ("kart bir eylem alani, kayda
          * deger bir cevap degil") ama bu, calisanin SORUSUNU da siliyordu:
@@ -80,7 +97,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
             documentId,
             question,
             answer: "Cevap yazısı oluşturma alanı açıldı.",
-            letterIntent: { karar: niyet.karar ?? null, gerekce: niyet.gerekce ?? null },
+            letterIntent: { karar: niyet.karar ?? null, gerekce: gerekce ?? null },
           });
         }
         reply.raw.end();

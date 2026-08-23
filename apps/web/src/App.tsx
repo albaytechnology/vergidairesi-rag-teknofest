@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Sidebar } from "./shell/Sidebar.tsx";
+import { UploadProvider } from "./shell/UploadProvider.tsx";
 import { DocumentLayout } from "./shell/DocumentLayout.tsx";
 import { UploadView } from "./views/UploadView.tsx";
 import { ArchiveView } from "./views/ArchiveView.tsx";
@@ -31,9 +32,12 @@ import { ServiceDetailView } from "./views/ServiceDetailView.tsx";
  */
 export function App() {
   return (
-    <div className="flex h-full w-full overflow-hidden bg-zemin">
-      <Sidebar />
-      <main className="flex min-w-0 flex-1 flex-col bg-zemin">
+    // Yukleme takibi rotalarin USTUNDE: hat arkada surerken calisan baska bir
+    // ekrana gecebilir, ilerleme ve "eklendi" bildirimi onunla birlikte gelir.
+    <UploadProvider>
+      <div className="flex h-full w-full overflow-hidden bg-zemin">
+        <Sidebar />
+        <main className="flex min-w-0 flex-1 flex-col bg-zemin">
         <Routes>
           <Route path="/" element={<Navigate to="/services" replace />} />
           <Route path="/upload" element={<UploadView />} />
@@ -60,8 +64,9 @@ export function App() {
             element={<div className="p-8 text-[13px] text-silik">Sayfa bulunamadı.</div>}
           />
         </Routes>
-      </main>
-    </div>
+        </main>
+      </div>
+    </UploadProvider>
   );
 }
 

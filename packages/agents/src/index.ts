@@ -19,6 +19,7 @@ export { NOT_FOUND_ANSWER, isNotFoundAnswer } from "./common/not-found.ts";
 export { askStream, askDocument } from "./chat/stream.ts";
 export type { ChatEvent, ChatTurn, AskStreamOptions, DocumentRecord } from "./chat/types.ts";
 export { classifyChatIntent, type ChatIntent } from "./chat/intent.ts";
+export { composeLetterReason } from "./chat/letter-reason.ts";
 
 export { findDocumentGaps } from "./gaps/find-gaps.ts";
 

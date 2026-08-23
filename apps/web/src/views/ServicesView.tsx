@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client.ts";
 import { ErrorBox } from "../components/ui.tsx";
 import { HeaderNav } from "../shell/HeaderNav.tsx";
 import type { ServiceRow } from "../api/types.ts";
+
+/** Videonun acik/kapali tercihi — oturumu asar, tarayicida kalir. */
+const VIDEO_KEY = "alb:usage-video";
 
 /**
  * Servis dagilimi.
@@ -20,12 +24,6 @@ export function ServicesView() {
   });
 
   const services = data?.services ?? [];
-  // Ust satirdaki sayi KARTLARIN TOPLAMI DEGIL, bekleyen tum evraktir:
-  // yonlendirilemeyenlerin bir karti yok ve disarida birakildiklarinda ekran,
-  // sol seritte duran bir evraki hic saymamis oluyordu. Kartlar + belirlenemedi
-  // = bekleyen evrak; iki tarafin ayrisabilecegi bir aralik kalmasin.
-  const pending =
-    services.reduce((t, s) => t + s.bekleyen, 0) + (data?.belirlenemedi ?? 0);
 
   return (
     <>
@@ -35,30 +33,14 @@ export function ServicesView() {
 
       <div className="flex-1 overflow-y-auto px-7 pt-8 pb-14">
         <div className="mx-auto w-full max-w-[1080px] animate-yukse">
+          <UsageVideo />
+
           <h1 className="m-0 text-[22px] font-bold tracking-[-.01em]">Vergi Dairesi Servisleri</h1>
           <p className="mt-1.5 max-w-[620px] text-[12.5px] leading-[1.6] text-pretty text-silik">
             Gelen evrak, Vergi Daireleri Kuruluş ve Görev Yönetmeliği’ndeki görev tanımlarına
-            (madde 11) göre ilgili servise yönlendirilir; her kartta o servisin madde numarası ve
-            bekleyen evrak sayısı görünür.
+            (madde 11) göre ilgili servise yönlendirilir; her kartta o servisin bekleyen evrak
+            sayısı görünür.
           </p>
-
-          {/*
-           * Tek sayac: BEKLEYEN EVRAK. "Cevaplanan", "aktif servis", "son evrak"
-           * kartlari kaldirildi — hicbiri bir sonraki adimi degistirmiyordu ve
-           * ekranin ust yarisini, is bekleyen havuzlardan once dolduruyorlardi.
-           * Cevaplanan evrakin yeri Arsiv.
-           */}
-          <div className="mt-5 inline-flex min-w-[220px] flex-col rounded-xl border border-cizgi bg-white px-5 py-4">
-            <span className="text-[10.5px] font-semibold tracking-[.09em] text-silik uppercase">
-              Bekleyen evrak
-            </span>
-            <span className="mt-1.5 text-[28px] leading-none font-bold tabular-nums">
-              {isLoading ? "—" : pending}
-            </span>
-            <span className="mt-1.5 text-[11.5px] text-silik">
-              cevap yazısı üretilmemiş evrak · {services.length} servis
-            </span>
-          </div>
 
           {/* Yonlendirilemeyen evrak bir hata degil, elle bakilacak bir is: havuzlarin
               arasina karismasin diye ustte ayri duruyor. */}
@@ -78,16 +60,19 @@ export function ServicesView() {
             <Skeleton />
           ) : (
             groupByUnit(services).map(([unit, group], i) => (
-              <section key={unit} className={i === 0 ? "mt-7" : "mt-9"}>
-                <div className="border-l-[3px] border-gib pl-3">
-                  <h2 className="m-0 text-[15px] font-bold">{UNIT_LABEL[unit] ?? unit}</h2>
+              <section key={unit} className={i === 0 ? "mt-7" : "mt-8"}>
+                {/* Baslik ve aciklamasi TEK SATIRDA: 14 servisin tamami tek
+                    ekranda gorunsun diye bolum basliklari mumkun oldugunca az
+                    dikey yer kaplamali. */}
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
+                  <h2 className="m-0 text-[13px] font-bold">{UNIT_LABEL[unit] ?? unit}</h2>
                   {UNIT_DESCRIPTION[unit] && (
-                    <p className="mt-0.5 text-xs text-silik">{UNIT_DESCRIPTION[unit]}</p>
+                    <p className="m-0 text-[12px] text-silik">{UNIT_DESCRIPTION[unit]}</p>
                   )}
                 </div>
-                <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(288px,1fr))] gap-3">
+                <div className="mt-2 overflow-hidden rounded-xl border border-cizgi bg-white">
                   {group.map((s) => (
-                    <ServiceCard key={s.servis} service={s} />
+                    <PoolRow key={s.servis} service={s} />
                   ))}
                 </div>
               </section>
@@ -99,42 +84,123 @@ export function ServicesView() {
   );
 }
 
-function ServiceCard({ service }: { service: ServiceRow }) {
+/**
+ * Havuz satiri.
+ *
+ * Kart izgarasi yerine LISTE: kartlarin cogu bos ve hepsi ayni buyuklukteydi,
+ * ekranin tamamini kaplayip "hangi havuzda is var" sorusunu okunmaz hale
+ * getiriyorlardi. Satirda goz tek bir dikey hat boyunca iniyor; is bekleyen
+ * servis noktasi ve sayisiyla kendini gosteriyor, bos havuz tire ile geri
+ * cekiliyor.
+ */
+function PoolRow({ service }: { service: ServiceRow }) {
   const hasPending = service.bekleyen > 0;
   return (
     <Link
       to={`/services/${encodeURIComponent(service.servis)}`}
-      className={`block rounded-xl border border-cizgi bg-white px-4 py-3.5 transition-[border-color,box-shadow] hover:border-cizgi-5 hover:shadow-kart ${
-        hasPending ? "border-l-[3px] border-l-gib" : ""
-      }`}
+      className="flex items-center gap-2.5 border-b border-cizgi px-4 py-2.5 transition-colors last:border-b-0 hover:bg-panel"
     >
-      <div className="flex items-start justify-between gap-3">
-        <span className="text-[13.5px] leading-[1.35] font-semibold">{service.servis}</span>
-        <span
-          className={`min-w-[22px] shrink-0 rounded-md px-1.5 py-0.5 text-center text-[11.5px] font-bold tabular-nums ${
-            hasPending ? "bg-gib text-white" : "bg-yuzey text-silik"
-          }`}
-        >
-          {service.bekleyen}
-        </span>
-      </div>
-      <div className="mt-2.5 flex items-center justify-between gap-2">
-        <span className="font-mono text-[10.5px] text-soluk">Madde {service.maddeNo}</span>
-        {/* Durum metni yalnizca bekleyen ise bakar; "N cevaplandi" bilgisi
-            Arsiv'in isi — kart, elde is olup olmadigini soylemeli. */}
-        <span className="text-[11px] text-silik">
-          {hasPending ? "cevap bekliyor" : "Bekleyen evrak yok"}
-        </span>
-      </div>
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${hasPending ? "bg-gib" : "bg-cizgi-4"}`}
+      />
+      <span
+        className={`min-w-0 flex-1 truncate text-[13px] leading-[1.35] ${
+          hasPending ? "font-semibold" : "font-medium text-govde"
+        }`}
+      >
+        {service.servis}
+      </span>
+      {/* Bos havuzda sifir DEGIL tire: sifirlar sayfa boyunca birbirine benzeyip
+          gercek sayilari golgeliyordu; tire "burada is yok" demenin sessiz yolu. */}
+      <span
+        className={`w-5 shrink-0 text-right text-[12px] font-bold tabular-nums ${
+          hasPending ? "text-gib" : "text-soluk"
+        }`}
+      >
+        {hasPending ? service.bekleyen : "—"}
+      </span>
     </Link>
+  );
+}
+
+/**
+ * Tanitim videosu — giris ekraninin en ustu.
+ *
+ * Sistemi ilk kez acan calisan once "bu ekranda ne yapacagim" sorusuyla
+ * karsilasiyor; servis havuzlari o soruyu cevaplamiyor. Video baslangicta ACIK
+ * durur ama KATLANABILIR: gunluk kullanan biri icin her aciliste ekranin
+ * ustunu kaplamamali, tercihi tarayicida saklaniyor.
+ *
+ * autoplay YOK: ses ve hareket, calisanin istemedigi anda baslamamali.
+ */
+function UsageVideo() {
+  const [open, setOpen] = useState(() => localStorage.getItem(VIDEO_KEY) !== "kapali");
+
+  const toggle = () => {
+    setOpen((v) => {
+      try {
+        localStorage.setItem(VIDEO_KEY, v ? "kapali" : "acik");
+      } catch {
+        /* Gizli sekmede yazilamayabilir; tercih yalnizca bu oturum surer. */
+      }
+      return !v;
+    });
+  };
+
+  return (
+    <section className="mb-8 overflow-hidden rounded-[14px] border border-cizgi bg-white">
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+        <div className="min-w-0">
+          <h2 className="m-0 text-[14px] font-bold tracking-[-.01em]">Nasıl kullanılır?</h2>
+          <p className="mt-0.5 text-[12px] text-silik">
+            Evrak ekleme, belgeyle sohbet ve cevap yazısı üretimi — kısa tanıtım.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          className="shrink-0 rounded-lg border border-cizgi-2 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-govde transition-colors hover:border-cizgi-5"
+        >
+          {open ? "Gizle" : "Göster"}
+        </button>
+      </div>
+
+      {open && (
+        // Sabit yukseklikte siyah sahne: alanin tamami dolar, kutu orani
+        // videonunkinden farkli oldugunda kenarlarda siyah bant kalir.
+        // Yukseklik onceden ayrildigi icin video yuklenirken sayfa zipramaz.
+        <div className="h-[420px] border-t border-cizgi-3 bg-black">
+          {/*
+           * object-contain: goruntu ASLA gerilmez, kutuya sigar. autoPlay icin
+           * muted zorunlu (tarayicilar sesli otomatik oynatmayi engelliyor);
+           * controls yine duruyor ki calisan sesi acabilsin ve durdurabilsin.
+           */}
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            controls
+            preload="metadata"
+            className="h-full w-full object-contain"
+          >
+            <source src="/usage-vid.mp4" type="video/mp4" />
+            Tarayıcınız video oynatmayı desteklemiyor.
+          </video>
+        </div>
+      )}
+    </section>
   );
 }
 
 function Skeleton() {
   return (
-    <div className="mt-7 grid grid-cols-[repeat(auto-fill,minmax(288px,1fr))] gap-3">
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="h-[76px] animate-pulse rounded-xl border border-cizgi bg-white" />
+    <div className="mt-7 overflow-hidden rounded-xl border border-cizgi bg-white">
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <div key={i} className="h-[41px] border-b border-cizgi last:border-b-0">
+          <div className="mt-3 ml-4 h-3.5 w-52 animate-pulse rounded bg-yuzey" />
+        </div>
       ))}
     </div>
   );

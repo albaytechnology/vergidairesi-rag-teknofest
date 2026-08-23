@@ -16,9 +16,18 @@ body {
   background: #fff;
   margin: 0;
 }
-body.onizleme { background: #e9e9ec; padding: 24px 0; }
+body.onizleme { background: #e9e9ec; padding: 24px; }
+/*
+ * Onizlemede sayfa A4 genisligindedir ama CERCEVEDEN TASAMAZ.
+ *
+ * Sabit 21cm, onizleme cercevesi darda kaldiginda sagdan tasip kirpiliyordu:
+ * soldaki 2,5 cm bosluk gorunurken sagdaki kesiliyor ve yazi ortali degil,
+ * saga kaymis gibi duruyordu. max-width ile sayfa daralinca kenar bosluklari
+ * iki yanda da korunur (box-sizing: border-box), goz de yaziyi ortada gorur.
+ */
 body.onizleme .sayfa {
   width: 21cm;
+  max-width: 100%;
   min-height: 29.7cm;
   margin: 0 auto;
   padding: 2.5cm;

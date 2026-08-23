@@ -37,12 +37,12 @@ export function Sidebar() {
         />
         <div className="min-w-0">
           <div className="truncate text-[12.5px] leading-tight font-bold tracking-[-.01em]">
-            Vergi Dairesi Başkanlığı
+            Gelir İdaresi Başkanlığı
           </div>
           {/* 272px seritte bu ad 10px'te tek satira sigmiyor; kirpmak yerine iki
               satira sariliyor — sistemin adi yarim gorunmemeli. */}
           <div className="mt-px text-[10px] leading-[1.25] font-medium text-balance text-ikincil">
-            Yapay Zeka Destekli Evrak ve Yazışma Sistemi
+            Dijital Vergi Dairesi - Yapay Zeka Destekli Evrak ve Yazışma Sistemi
           </div>
         </div>
       </div>

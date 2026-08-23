@@ -276,8 +276,10 @@ export function ReplyView() {
       </div>
 
       <div className="min-w-[380px] flex-1 overflow-y-auto p-7">
+        {/* A4 (21cm ≈ 794px) + onizlemenin iki yanindaki 24px bosluk: yer varken
+            sayfa gercek genisliginde gorunsun, dar ekranda kendisi daralsin. */}
         {html ? (
-          <div className="mx-auto max-w-[720px] animate-yukse overflow-hidden rounded-[14px] border border-cizgi bg-white">
+          <div className="mx-auto max-w-[848px] animate-yukse overflow-hidden rounded-[14px] border border-cizgi bg-white">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cizgi-3 px-6 py-4">
               <div className="text-[11px] font-semibold tracking-[.09em] text-silik uppercase">
                 Cevap yazısı taslağı

@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client.ts";
+import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { WarningBox } from "../components/ui.tsx";
 import { HeaderNav } from "../shell/HeaderNav.tsx";
+import { useUploads, type TrackedUpload } from "../shell/UploadProvider.tsx";
+import { api } from "../api/client.ts";
 import type { UploadStage } from "../api/types.ts";
 
 const ACCEPTED_TYPES = ".pdf,.docx,.xlsx,.txt,.md";
 
-const STAGE_LABEL: Record<UploadStage, string> = {
-  kuyrukta: "kayda alınıyor — parse bekliyor",
-  isleniyor: "işleniyor — chunk · analiz · servis yönlendirme",
-  hazir: "kaydedildi",
-  hata: "parse başarısız",
+/** Asamanin adi ve hattaki ilerleme payi — cubuk buradan doluyor. */
+const STAGES: Record<UploadStage, { label: string; percent: number }> = {
+  kuyrukta: { label: "kayda alındı — parse bekliyor", percent: 15 },
+  isleniyor: { label: "işleniyor — chunk · analiz · servis yönlendirme · indeksleme", percent: 65 },
+  hazir: { label: "kaydedildi ve arandığında bulunur", percent: 100 },
+  hata: { label: "parse başarısız — dosya okunamadı", percent: 100 },
 };
 
 /**
@@ -20,55 +21,20 @@ const STAGE_LABEL: Record<UploadStage, string> = {
  *
  * Yonetmelikte kuruma gelen her belge once Yazisma ve Arsiv Servisi'ne girer
  * (M.11-B-I-6); buradaki birakma alani o girisi temsil eder. Yukleme istegi
- * LLM'i BEKLEMEZ: dosya diske yazilip kuyruga birakilir, ilerleme yoklamayla
- * gosterilir ve belge aranabilir hale gelince sohbeti acilir.
+ * LLM'i BEKLEMEZ: dosya diske yazilip kuyruga birakilir ve hat arkada calisir.
  *
- * Ekranda YALNIZCA yukleme var. Onceki surumde altta "cevap bekleyen
- * evraklardan devam edin" listesi duruyordu; ayni is artik Servisler ve Arsiv
- * ekranlarinda, kendi filtreleriyle yapiliyor — burada tekrari, yuklemeyi
- * sayfanin kucuk bir parcasi haline getiriyordu.
+ * Ilerleme burada TUTULMAZ, yalnizca gosterilir (bkz. UploadProvider): takip
+ * rotalarin ustunde durdugu icin calisan bu ekrandan ayrilip geri geldiginde
+ * ayni satirlari bulur, is bittiginde de nerede olursa olsun bildirim alir.
  */
 export function UploadView() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
+  const { uploads, track, toast } = useUploads();
 
-  const [paths, setPaths] = useState<string[]>([]);
-  /** Diskte ad carpismasin diye UUID onekli yaziliyor; listede kullanicinin sectigi ad gorunur. */
-  const [names, setNames] = useState<Record<string, string>>({});
   const [rejected, setRejected] = useState<{ filename: string; sebep: string }[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const { data } = useQuery({
-    queryKey: ["upload-status", paths],
-    queryFn: () => api.uploadStatus(paths),
-    enabled: paths.length > 0,
-    // Hat calisirken sik yokla, hepsi bitince dur.
-    refetchInterval: (q) => {
-      const rows = q.state.data?.durumlar ?? [];
-      const running = rows.some((d) => d.asama === "kuyrukta" || d.asama === "isleniyor");
-      return rows.length === 0 || running ? 2000 : false;
-    },
-  });
-
-  const statuses = data?.durumlar ?? [];
-  const readyId = statuses.find((d) => d.asama === "hazir" && d.id)?.id ?? null;
-
-  /**
-   * Ilk belge aranabilir olunca dogrudan sohbetine gec.
-   *
-   * Olcut "parse edildi" degil "embed edildi" (bkz. /api/documents/status):
-   * erken gecis, kullanicinin heniz indekslenmemis belgeye soru sorup
-   * "bu bilgi belgede bulunamadi" cevabi almasina yol aciyordu.
-   */
-  useEffect(() => {
-    if (!readyId) return;
-    void qc.invalidateQueries({ queryKey: ["archive"] });
-    void qc.invalidateQueries({ queryKey: ["services"] });
-    navigate(`/documents/${readyId}`);
-  }, [readyId, navigate, qc]);
 
   async function upload(files: File[]) {
     if (!files.length) return;
@@ -76,12 +42,11 @@ export function UploadView() {
     setError(null);
     try {
       const result = await api.upload(files);
-      setPaths((prev) => [...prev, ...result.dosyalar.map((d) => d.path)]);
-      setNames((prev) => ({
-        ...prev,
-        ...Object.fromEntries(result.dosyalar.map((d) => [d.path, d.filename])),
-      }));
+      track(result.dosyalar);
       setRejected(result.reddedilen);
+      for (const r of result.reddedilen) {
+        toast({ tone: "hata", title: "Dosya kabul edilmedi", detail: `${r.filename} — ${r.sebep}` });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Yükleme başarısız");
     } finally {
@@ -97,9 +62,7 @@ export function UploadView() {
 
       <div className="flex flex-1 justify-center overflow-y-auto px-7 py-14">
         <div className="w-full max-w-[660px] animate-yukse">
-          <h1 className="m-0 text-center text-[26px] font-bold tracking-[-.02em]">
-            Evrak ekle
-          </h1>
+          <h1 className="m-0 text-center text-[26px] font-bold tracking-[-.02em]">Evrak ekle</h1>
           <p className="mt-2 mb-[26px] text-center text-[13.5px] text-pretty text-ikincil">
             Sisteme gelen evrak otomatik okunur, ilgili servise yönlendirilir ve cevap yazısı
             üretilene kadar takipte kalır.
@@ -130,7 +93,9 @@ export function UploadView() {
               void upload([...e.dataTransfer.files]);
             }}
             className={`flex w-full flex-col items-center gap-1.5 rounded-[14px] border-[1.5px] border-dashed px-6 py-[30px] transition-colors ${
-              dragOver ? "border-gib bg-gib-duman" : "border-cizgi-4 bg-white hover:border-gib hover:bg-gib-duman"
+              dragOver
+                ? "border-gib bg-gib-duman"
+                : "border-cizgi-4 bg-white hover:border-gib hover:bg-gib-duman"
             }`}
           >
             <span className="text-[15px] font-semibold">
@@ -160,32 +125,63 @@ export function UploadView() {
             </div>
           )}
 
-          {statuses.length > 0 && (
+          {uploads.length > 0 && (
             <div className="mt-4 flex flex-col gap-2">
-              {statuses.map((d) => (
-                <div
-                  key={d.path}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-cizgi bg-white px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-[13.5px] font-semibold">
-                      {names[d.path] ?? d.path.split("/").pop()}
-                    </div>
-                    <div className="mt-0.5 text-[11.5px] text-silik">
-                      {STAGE_LABEL[d.asama]}
-                      {d.servis ? ` → ${d.servis}` : ""}
-                    </div>
-                  </div>
-                  {d.asama !== "hata" && d.asama !== "hazir" && (
-                    <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-cizgi-4 border-t-gib" />
-                  )}
-                </div>
+              {uploads.map((u) => (
+                <UploadRow key={u.path} upload={u} />
               ))}
             </div>
           )}
-
         </div>
       </div>
     </>
+  );
+}
+
+/** Tek dosyanin hattaki durumu: ad, asama metni ve dolan cubuk. */
+function UploadRow({ upload }: { upload: TrackedUpload }) {
+  const stage = STAGES[upload.stage];
+  const hata = upload.stage === "hata";
+  const bitti = upload.stage === "hazir";
+
+  return (
+    <div className="rounded-xl border border-cizgi bg-white px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-[13.5px] font-semibold">{upload.filename}</div>
+          <div className={`mt-0.5 text-[11.5px] ${hata ? "text-uyari" : "text-silik"}`}>
+            {stage.label}
+            {upload.servis ? ` → ${upload.servis}` : ""}
+          </div>
+        </div>
+        {bitti && upload.docId ? (
+          <Link
+            to={`/documents/${upload.docId}`}
+            className="shrink-0 rounded-lg border border-cizgi-2 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-govde transition-colors hover:border-gib hover:text-gib"
+          >
+            Sohbeti aç
+          </Link>
+        ) : (
+          !hata && (
+            <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-cizgi-4 border-t-gib" />
+          )
+        )}
+      </div>
+
+      {/*
+       * Ilerleme cubugu asamadan turuyor, gercek bir yuzde degil: hat adim
+       * adim ilerliyor ve sunucu ara ilerleme bildirmiyor. Yaniltmamak icin
+       * adimlar ayni araliklarla degil, surelerine yakin paylarla bolundu —
+       * en uzun bekleme "isleniyor" adimindadir.
+       */}
+      <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-yuzey">
+        <div
+          className={`h-full rounded-full transition-[width] duration-500 ease-out ${
+            hata ? "bg-uyari" : bitti ? "bg-onay" : "bg-gib"
+          }`}
+          style={{ width: `${stage.percent}%` }}
+        />
+      </div>
+    </div>
   );
 }

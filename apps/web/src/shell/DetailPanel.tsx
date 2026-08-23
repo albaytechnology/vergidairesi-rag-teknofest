@@ -67,15 +67,15 @@ export function DetailPanel({
       )}
 
       <aside
-        // Genislik animasyonu: 0 ↔ 340px. Icerik SABIT genislikte bir kutuda
+        // Genislik animasyonu: 0 ↔ 430px. Icerik SABIT genislikte bir kutuda
         // duruyor, aksi halde panel kapanirken metin her karede yeniden
         // sariliyor ve animasyon titriyordu.
         className={`overflow-hidden border-r border-cizgi bg-white transition-[width,opacity] duration-[280ms] ease-[cubic-bezier(.4,0,.2,1)] ${
-          open ? "w-[340px] opacity-100" : "w-0 opacity-0"
+          open ? "w-[430px] opacity-100" : "w-0 opacity-0"
         }`}
         aria-hidden={!open}
       >
-        <div className="h-full w-[340px] overflow-y-auto px-5 pt-[22px] pb-10">
+        <div className="h-full w-[430px] overflow-y-auto px-5 pt-[22px] pb-10">
           <div className="mb-[18px] flex items-center justify-between gap-2">
             <div className="text-[12.5px] font-bold tracking-[-.01em]">Belge detayı</div>
             <button
@@ -92,14 +92,16 @@ export function DetailPanel({
               ait?" — ozet ancak bu cevaplandiktan sonra okunuyor. */}
           <RoutingCard doc={doc} />
 
+          {/* Ozet KIRPILMAZ. Panelin en cok okunan alani burasi: calisan evrakin
+              ne oldugunu once buradan ogreniyor ve ozet zaten kisaltilmis bir
+              metin — ustune bir de "Devamini gor" koymak her evrakta fazladan
+              bir tiklama demekti. Uzunlugu panelin kendi dikey kaydirmasi
+              tasiyor; kirpma altindaki bolumlerin gorunurlugu icin gerekli olan
+              yerlerde (cikarilan bilgiler, bulgular) duruyor. */}
           <SectionLabel>Özet</SectionLabel>
-          <div className="mt-2 mb-6">
-            <Expandable maxHeight={132}>
-              <p className="text-[12.5px] leading-[1.65] text-pretty text-govde">
-                {doc.ozet ?? "Bu evrak için özet üretilmemiş."}
-              </p>
-            </Expandable>
-          </div>
+          <p className="mt-2 mb-6 text-[12.5px] leading-[1.65] text-pretty text-govde">
+            {doc.ozet ?? "Bu evrak için özet üretilmemiş."}
+          </p>
 
           <ExtractedInfo doc={doc} />
           <GapsCard gaps={doc.eksikler} />
@@ -131,7 +133,15 @@ export function DetailPanel({
 
 function ExtractedInfo({ doc }: { doc: DocumentSummary }) {
   const entities = doc.entities;
+  // Evrak turu ve KVKK, diger cikarilan alanlar gibi ETIKET SATIRI: ikisi de
+  // belgeden okunan bilgi ve rozet olarak durduklarinda, altlarindaki
+  // Kisi/Tutar/Tarih izgarasindan kopuk, ayri bir grup gibi gorunuyorlardi.
+  const etiketler = [
+    doc.docType ? docTypeLabel(doc.docType) : null,
+    doc.containsPII ? "KVKK" : null,
+  ].filter(Boolean);
   const rows: [string, string][] = [
+    ["Etiketler", etiketler.length ? etiketler.join(", ") : "—"],
     ["Kişi", joinValues(entities?.kisiKurumlar)],
     ["Tutar", joinValues(entities?.tutarlar)],
     ["Tarih", joinValues(entities?.tarihler)],
@@ -142,28 +152,6 @@ function ExtractedInfo({ doc }: { doc: DocumentSummary }) {
   return (
     <>
       <SectionLabel>Çıkarılan bilgiler</SectionLabel>
-
-      {/* Evrak tipi ve KVKK rozetleri bu bolumun icinde: ikisi de belgeden
-          OKUNAN bilgi — biri turu, digeri kisisel veri tasidigi. Panelin en
-          ustunde ayri durduklarinda, cikarilan diger alanlardan kopuk iki
-          etiket gibi gorunuyorlardi. */}
-      {(doc.docType || doc.containsPII) && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {doc.docType && (
-            <span className="rounded-[5px] border border-gib-cizgi bg-gib-acik px-[7px] py-[3px] text-[10.5px] font-semibold text-gib">
-              {docTypeLabel(doc.docType)}
-            </span>
-          )}
-          {doc.containsPII && (
-            <span
-              title="Belge kişisel veri içeriyor"
-              className="rounded-[5px] border border-uyari-cizgi bg-uyari-zemin-2 px-[7px] py-[3px] font-mono text-[10.5px] text-uyari"
-            >
-              KVKK
-            </span>
-          )}
-        </div>
-      )}
 
       <div className="mt-2.5 mb-6">
         <Expandable maxHeight={150}>
