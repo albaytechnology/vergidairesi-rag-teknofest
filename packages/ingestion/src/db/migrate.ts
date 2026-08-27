@@ -11,6 +11,7 @@ import { sql as gaps } from "./migrations/009-gaps.ts";
 import { sql as chatLetterIntent } from "./migrations/010-chat-letter-intent.ts";
 import { sql as routingCatalog } from "./migrations/011-routing-catalog.ts";
 import { sql as routingSource } from "./migrations/012-routing-source.ts";
+import { sql as kunyeStep } from "./migrations/013-kunye-step.ts";
 
 /**
  * Semanin adimlari, CALISMA SIRASINDA.
@@ -33,6 +34,7 @@ const ADIMLAR = [
   chatLetterIntent,
   routingCatalog,
   routingSource,
+  kunyeStep,
 ];
 
 /**

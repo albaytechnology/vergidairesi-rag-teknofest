@@ -1,10 +1,13 @@
-/** Ollama structured output icin JSON Schema (DocumentAnalysisSchema ile ayni sekil). */
-export const ANALYSIS_JSON_SCHEMA: Record<string, unknown> = {
+/**
+ * Ollama structured output icin JSON Schema'lar (shared'daki zod sekilleriyle ayni).
+ *
+ * Analiz IKI cagriya bolundu (bkz. analysis/prompt.ts): kunye alanlari ile
+ * ozet metni ayri sema, ayri cagri. Sema da bolunmek zorunda — modelin
+ * dolduracagi alan kumesi, o adimda gercekten istenen alanlardan ibaret olmali.
+ */
+export const KUNYE_JSON_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
-    konu: { type: "string" },
-    baslikOnerisi: { type: "string" },
-    ozet: { type: "string" },
     docType: {
       type: "string",
       enum: [
@@ -48,17 +51,17 @@ export const ANALYSIS_JSON_SCHEMA: Record<string, unknown> = {
     containsPII: { type: "boolean" },
     confidence: { type: "number" },
   },
-  required: [
-    "konu",
-    "baslikOnerisi",
-    "ozet",
-    "docType",
-    "islemTuru",
-    "alacakTuru",
-    "entities",
-    "containsPII",
-    "confidence",
-  ],
+  required: ["docType", "islemTuru", "alacakTuru", "entities", "containsPII", "confidence"],
+};
+
+export const OZET_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    konu: { type: "string" },
+    baslikOnerisi: { type: "string" },
+    ozet: { type: "string" },
+  },
+  required: ["konu", "baslikOnerisi", "ozet"],
 };
 
 /** Eksik bilgi / tutarsizlik taramasi (DocumentGapReportSchema ile ayni sekil). */

@@ -31,7 +31,11 @@ export {
   statusCounts,
 } from "./documents/store.ts";
 export { docsToClassify, saveClassification, type DocToClassify } from "./documents/classify.ts";
-export { saveDocumentAnalysis, documentAnalysisFromRow } from "./documents/analysis.ts";
+export {
+  saveDocumentKunye,
+  saveDocumentSummary,
+  documentAnalysisFromRow,
+} from "./documents/analysis.ts";
 export { saveDocumentGaps, docsToScanGaps, type DocToScanGaps } from "./documents/gaps.ts";
 export { setLifecycleStatus, type LifecycleStatus } from "./documents/lifecycle.ts";
 export { listArchiveDocuments, archiveCounts } from "./documents/archive.ts";

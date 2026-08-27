@@ -12,6 +12,13 @@ import {
   pool,
 } from "@albay/ingestion";
 import { routeDocument, formatRoutingDecision, isDisputeService } from "@albay/agents";
+import {
+  hatAdimlari,
+  kuyruktakiAdimlar,
+  embedBitti,
+  type StatusRow,
+} from "../helpers/pipeline-steps.ts";
+import { parseIsiVarMi } from "../helpers/queue.ts";
 
 /** Havuz listesi ve belge detayi. */
 export async function registerDocumentRoutes(app: FastifyInstance): Promise<void> {
@@ -77,42 +84,67 @@ export async function registerDocumentRoutes(app: FastifyInstance): Promise<void
    * tutulur, hicbir zaman embed edilmez (bkz. chunksToEmbedForDoc). Tum
    * chunk'lari sayan bir olcut hicbir zaman saglanmaz — belge sonsuza kadar
    * "isleniyor" gorunur.
+   *
+   * Tek bir asama YETMIYOR: hat dakikalarca surebiliyor ve calisan nerede
+   * olundugunu gormeli. `adimlar` hattin her adimini ayri ayri bildirir (bkz.
+   * helpers/pipeline-steps.ts); `asama` ozet olarak kalir — sohbet eki
+   * yuklemesi yalnizca "hazir mi" diye bakiyor.
    */
   app.get<{ Querystring: { paths?: string } }>("/api/documents/status", async (req) => {
     const paths = (req.query.paths ?? "").split("\n").map((p) => p.trim()).filter(Boolean);
     if (!paths.length) return { durumlar: [] };
-    const res = await pool.query<{
-      id: string;
-      path: string;
-      filename: string;
-      status: string;
-      routed_service: string | null;
-      bekleyen_chunk: string;
-      toplam_chunk: string;
-    }>(
-      `SELECT d.id, d.path, d.filename, d.status, d.routed_service,
-              COUNT(c.id) FILTER (WHERE c.embedded_at IS NULL) AS bekleyen_chunk,
-              COUNT(c.id) AS toplam_chunk
+    const res = await pool.query<
+      StatusRow & { id: string; path: string; filename: string; routed_service: string | null }
+    >(
+      `SELECT d.id, d.path, d.filename, d.status, d.corpus, d.session_id, d.routed_service,
+              d.kunye_at, d.analyzed_at, d.routing_status, d.gaps_scanned_at,
+              COUNT(c.id) AS chunk_toplam,
+              COUNT(c.id) FILTER (WHERE c.kind = 'child') AS child_toplam,
+              COUNT(c.id) FILTER (WHERE c.kind = 'child' AND c.embedded_at IS NULL)
+                AS child_bekleyen
        FROM documents d
-       LEFT JOIN chunks c ON c.doc_id = d.id AND c.kind = 'child'
+       LEFT JOIN chunks c ON c.doc_id = d.id
        WHERE d.path = ANY($1::text[])
        GROUP BY d.id`,
       [paths],
     );
     const bulunan = new Map(res.rows.map((r) => [r.path, r]));
+
+    /*
+     * Kaydi olmayan yollar: dosya ya HENUZ sirada bekliyor ya da o is artik
+     * yok. Ikisi ayni cevabi verdigi surece arayuz, karsiligi kalmamis bir
+     * yuklemeyi sonsuza kadar "belge okunuyor" diye gosteriyordu (orn. veri
+     * tabani sifirlandiktan sonra sekmede duran eski takip kaydi). Kuyrukta
+     * karsiligi olup olmadigina bakarak ikisini ayiriyoruz.
+     */
+    const kayitsiz = paths.filter((p) => !bulunan.has(p));
+    const sirada = new Set(
+      (
+        await Promise.all(
+          kayitsiz.map(async (p) => ((await parseIsiVarMi(p)) ? p : null)),
+        )
+      ).filter((p): p is string => p !== null),
+    );
+
     return {
       durumlar: paths.map((path) => {
         const r = bulunan.get(path);
-        // Kayit yoksa dosya henuz parse kuyrugunda bekliyor demektir.
-        if (!r) return { path, asama: "kuyrukta" as const, id: null, servis: null };
-        const embedBitti = Number(r.toplam_chunk) > 0 && Number(r.bekleyen_chunk) === 0;
+        if (!r) {
+          if (!sirada.has(path)) {
+            // Ne kaydi ne isi var: takip edilecek bir sey kalmamis.
+            return { path, asama: "kayip" as const, adimlar: [], id: null, servis: null };
+          }
+          const adimlar = kuyruktakiAdimlar();
+          return { path, asama: "kuyrukta" as const, adimlar, id: null, servis: null };
+        }
         const asama =
           r.status === "failed"
             ? ("hata" as const)
-            : embedBitti
+            : embedBitti(r)
               ? ("hazir" as const)
               : ("isleniyor" as const);
-        return { path, asama, id: r.id, filename: r.filename, servis: r.routed_service };
+        const adimlar = hatAdimlari(r);
+        return { path, asama, adimlar, id: r.id, filename: r.filename, servis: r.routed_service };
       }),
     };
   });

@@ -143,10 +143,19 @@ export const IslemTuruSchema = z.enum([
 ]);
 export type IslemTuru = z.infer<typeof IslemTuruSchema>;
 
-export const DocumentAnalysisSchema = z.object({
-  konu: z.string(),
-  baslikOnerisi: z.string(),
-  ozet: z.string(),
+/**
+ * Evrakin KUNYESI: turu, talep edilen islem, alacak turu ve yapisal alanlar.
+ *
+ * Ozetten AYRI duruyor cunku iki is birbirinden farkli: kunye, belgede yazan
+ * alanlarin sabit bir sozlukten (enum) ya da birebir metinden okunmasi;
+ * ozet ise serbest metin uretimi. Ikisi tek cagriya sikistirildiginda model
+ * once uzun bir ozet yazip kunye alanlarini o ozete gore dolduruyordu —
+ * yonlendirmenin birincil sinyali olan islemTuru, belgenin kendisi yerine
+ * modelin kendi cumlesinin turevi haline geliyordu.
+ *
+ * Sira da bu yuzden onemli: once kunye, sonra ozet (bkz. llm/analysis).
+ */
+export const DocumentKunyeSchema = z.object({
   docType: EvrakDocTypeSchema,
   /** Talep edilen islem — yonlendirmenin birincil sinyali. */
   islemTuru: IslemTuruSchema,
@@ -156,6 +165,18 @@ export const DocumentAnalysisSchema = z.object({
   containsPII: z.boolean(),
   confidence: z.number().min(0).max(1),
 });
+export type DocumentKunye = z.infer<typeof DocumentKunyeSchema>;
+
+/** Evrakin insan tarafindan okunacak yuzu: konu cumlesi, kisa baslik, ozet. */
+export const DocumentOzetSchema = z.object({
+  konu: z.string(),
+  baslikOnerisi: z.string(),
+  ozet: z.string(),
+});
+export type DocumentOzet = z.infer<typeof DocumentOzetSchema>;
+
+/** Iki adimin birlesimi — hattan sonra evrakin tam analizi budur. */
+export const DocumentAnalysisSchema = DocumentOzetSchema.merge(DocumentKunyeSchema);
 export type DocumentAnalysis = z.infer<typeof DocumentAnalysisSchema>;
 
 /**

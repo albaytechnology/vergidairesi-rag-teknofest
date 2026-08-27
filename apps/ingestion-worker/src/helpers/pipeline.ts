@@ -1,5 +1,5 @@
 /**
- * Tek bir dokumani bastan sona isleyen hat: chunk → analiz → yonlendirme → embed.
+ * Tek bir dokumani bastan sona isleyen hat: chunk → kunye → ozet → yonlendirme → embed.
  *
  * CLI'lar (pnpm chunk / classify / embed) toplu is icin duruyor; bu modul ise
  * "bir evrak yuklendi, servis havuzuna dussun" akisi icin belge belge calisir.
@@ -7,7 +7,12 @@
  */
 import { readFile } from "node:fs/promises";
 import { chunkDocument, chunkRegulationDocument } from "@albay/chunking";
-import { OllamaClient, analyzeDocument, analyzeDocumentGaps } from "@albay/llm";
+import {
+  OllamaClient,
+  analyzeDocumentGaps,
+  extractDocumentKunye,
+  summarizeDocument,
+} from "@albay/llm";
 import { routeDocument } from "@albay/agents";
 import { config, type Corpus, type DocumentAnalysis } from "@albay/shared";
 import {
@@ -15,7 +20,8 @@ import {
   replaceChunks,
   chunksToEmbedForDoc,
   markEmbedded,
-  saveDocumentAnalysis,
+  saveDocumentKunye,
+  saveDocumentSummary,
   saveDocumentGaps,
   saveRoutingDecision,
   setDocumentCorpus,
@@ -101,15 +107,27 @@ export async function processDocument(
   await replaceChunks(doc.id, chunks);
   trace.push(`chunk → ${chunks.filter((c) => c.kind === "child").length} child`);
 
-  // 2-3. Analiz + yonlendirme (yalnizca evrak korpusunda)
+  // 2-4. Analiz (kunye + ozet) + yonlendirme (yalnizca evrak korpusunda)
   let analysis: DocumentAnalysis | null = null;
   let routedService: string | null = null;
   let routingStatus: PipelineResult["routingStatus"] = "atlandi";
 
   if (corpus === "documents" && !opts.skipAnalysis && !oturumEki) {
-    analysis = await analyzeDocument(ollama, { filename: doc.filename, text: markdown });
-    await saveDocumentAnalysis(doc.id, analysis);
-    trace.push(`analiz → ${analysis.docType}: ${analysis.konu}`);
+    /*
+     * Analiz iki adim: once kunye (belge turu, talep edilen islem, entity'ler),
+     * sonra ozet. Ayrilmasinin nedeni llm/analysis/analyze.ts'te; buradaki
+     * sonucu, her adimin BITER BITMEZ kaydedilmesi — yukleme ekranindaki
+     * cubuk iki bolmeyi de gercek zamaninda doldurabilsin.
+     */
+    const kunye = await extractDocumentKunye(ollama, { filename: doc.filename, text: markdown });
+    await saveDocumentKunye(doc.id, kunye);
+    trace.push(`kunye → ${kunye.docType} / ${kunye.islemTuru}`);
+
+    const ozet = await summarizeDocument(ollama, { filename: doc.filename, text: markdown }, kunye);
+    await saveDocumentSummary(doc.id, ozet);
+    trace.push(`ozet → ${ozet.konu}`);
+
+    analysis = { ...ozet, ...kunye };
 
     const routing = await routeDocument({
       metin: routingMetni(analysis),

@@ -4,17 +4,37 @@ import { WarningBox } from "../components/ui.tsx";
 import { HeaderNav } from "../shell/HeaderNav.tsx";
 import { useUploads, type TrackedUpload } from "../shell/UploadProvider.tsx";
 import { api } from "../api/client.ts";
-import type { UploadStage } from "../api/types.ts";
+import type { UploadStep, UploadStepStatus } from "../api/types.ts";
 
 const ACCEPTED_TYPES = ".pdf,.docx,.xlsx,.txt,.md";
 
-/** Asamanin adi ve hattaki ilerleme payi — cubuk buradan doluyor. */
-const STAGES: Record<UploadStage, { label: string; percent: number }> = {
-  kuyrukta: { label: "kayda alındı — parse bekliyor", percent: 15 },
-  isleniyor: { label: "işleniyor — chunk · analiz · servis yönlendirme · indeksleme", percent: 65 },
-  hazir: { label: "kaydedildi ve arandığında bulunur", percent: 100 },
-  hata: { label: "parse başarısız — dosya okunamadı", percent: 100 },
+/**
+ * Hat adimlarinin ekrandaki karsiligi.
+ *
+ * `pay` cubuktaki genisliktir: adimlar esit surmuyor — kunye, ozet, yonlendirme
+ * ve eksik bilgi taramasinin her biri ayri bir LLM cagrisi ve hattaki surenin
+ * neredeyse tamami orada geciyor; chunk'lama ile indeksleme saniyeler suruyor.
+ * Esit bolunmus bir cubuk, adimlarin yarisi bittiginde surenin de yarisi gecmis
+ * izlenimi verirdi.
+ *
+ * `is` simdiki, `bitti` gecmis zamanda: satir hem su an ne yapildigini hem
+ * neyin tamamlandigini ayni sozcuklerle soyluyor.
+ */
+const ADIMLAR: Record<UploadStep, { ad: string; is: string; bitti: string; pay: number }> = {
+  parse: { ad: "Okuma", is: "belge okunuyor", bitti: "belge okundu", pay: 16 },
+  chunk: { ad: "Parçalama", is: "metin parçalanıyor", bitti: "metin parçalandı", pay: 4 },
+  kunye: { ad: "Künye", is: "künye çıkarılıyor", bitti: "künye çıkarıldı", pay: 16 },
+  ozet: { ad: "Özet", is: "özet yazılıyor", bitti: "özet çıkarıldı", pay: 15 },
+  yonlendirme: { ad: "Yönlendirme", is: "servis aranıyor", bitti: "servise yönlendirildi", pay: 25 },
+  eksik: { ad: "Eksik bilgi", is: "eksik bilgi taranıyor", bitti: "eksik bilgi tarandı", pay: 18 },
+  indeks: { ad: "İndeksleme", is: "aramaya indeksleniyor", bitti: "aramaya eklendi", pay: 6 },
 };
+
+/** Adim listesi sunucudan gelene kadarki ilk kare — cubuk bos baslamasin. */
+const ILK_ADIMLAR: UploadStepStatus[] = (Object.keys(ADIMLAR) as UploadStep[]).map((ad) => ({
+  ad,
+  durum: ad === "parse" ? "calisiyor" : "bekliyor",
+}));
 
 /**
  * Evrak ekle — sistemin tek giris noktasi.
@@ -28,7 +48,7 @@ const STAGES: Record<UploadStage, { label: string; percent: number }> = {
  * ayni satirlari bulur, is bittiginde de nerede olursa olsun bildirim alir.
  */
 export function UploadView() {
-  const { uploads, track, toast } = useUploads();
+  const { uploads, track, kaldir, toast } = useUploads();
 
   const [rejected, setRejected] = useState<{ filename: string; sebep: string }[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -128,7 +148,7 @@ export function UploadView() {
           {uploads.length > 0 && (
             <div className="mt-4 flex flex-col gap-2">
               {uploads.map((u) => (
-                <UploadRow key={u.path} upload={u} />
+                <UploadRow key={u.path} upload={u} onKaldir={() => kaldir(u.path)} />
               ))}
             </div>
           )}
@@ -138,50 +158,142 @@ export function UploadView() {
   );
 }
 
-/** Tek dosyanin hattaki durumu: ad, asama metni ve dolan cubuk. */
-function UploadRow({ upload }: { upload: TrackedUpload }) {
-  const stage = STAGES[upload.stage];
+/** Tek dosyanin hattaki durumu: ad, calisan adim ve adim adim dolan cubuk. */
+function UploadRow({ upload, onKaldir }: { upload: TrackedUpload; onKaldir: () => void }) {
   const hata = upload.stage === "hata";
   const bitti = upload.stage === "hazir";
+  /*
+   * "kayip": sunucuda ne belge kaydi ne kuyrukta isi var. Eskiden bu durum
+   * "kuyrukta" ile ayni gorunuyor ve satir sonsuza kadar "belge okunuyor"
+   * diye donuyordu — sekmede duran eski bir takip kaydi (orn. veri tabani
+   * sifirlandiktan sonra) hicbir zaman kapanmiyordu.
+   */
+  const kayip = upload.stage === "kayip";
+
+  /*
+   * Atlanan adim hic cizilmez.
+   *
+   * Sohbete eklenen dosya kunye/ozet/yonlendirme/eksik bilgi adimlarindan gecmez
+   * (bkz. pipeline.ts); bu adimlari soluk da olsa gostermek, hicbir zaman
+   * dolmayacak bolmeler birakip yukleme yarim kalmis izlenimi verirdi.
+   */
+  const adimlar = upload.adimlar.length
+    ? upload.adimlar.filter((a) => a.durum !== "atlandi")
+    : ILK_ADIMLAR;
+  const calisan = adimlar.find((a) => a.durum === "calisiyor" || a.durum === "hata");
+  const biten = adimlar.filter((a) => a.durum === "bitti").length;
+
+  const durum = kayip
+    ? "kaydı bulunamadı — kuyrukta işi yok, yeniden yükleyin"
+    : hata
+      ? `${calisan ? ADIMLAR[calisan.ad].ad.toLocaleLowerCase("tr-TR") : "okuma"} adımı başarısız`
+      : bitti
+        ? "tamamlandı — kaydedildi ve arandığında bulunur"
+        : calisan
+          ? `${biten + 1}/${adimlar.length} · ${ADIMLAR[calisan.ad].is}`
+          : "kayda alındı — sıraya girdi";
 
   return (
     <div className="rounded-xl border border-cizgi bg-white px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-[13.5px] font-semibold">{upload.filename}</div>
-          <div className={`mt-0.5 text-[11.5px] ${hata ? "text-uyari" : "text-silik"}`}>
-            {stage.label}
+          <div className={`mt-0.5 text-[11.5px] ${hata || kayip ? "text-uyari" : "text-silik"}`}>
+            {durum}
             {upload.servis ? ` → ${upload.servis}` : ""}
           </div>
         </div>
-        {bitti && upload.docId ? (
-          <Link
-            to={`/documents/${upload.docId}`}
-            className="shrink-0 rounded-lg border border-cizgi-2 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-govde transition-colors hover:border-gib hover:text-gib"
+        <div className="flex shrink-0 items-center gap-2">
+          {bitti && upload.docId ? (
+            <Link
+              to={`/documents/${upload.docId}`}
+              className="rounded-lg border border-cizgi-2 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-govde transition-colors hover:border-gib hover:text-gib"
+            >
+              Sohbeti aç
+            </Link>
+          ) : (
+            !hata &&
+            !kayip && (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cizgi-4 border-t-gib" />
+            )
+          )}
+          {/* Satiri listeden dusurur; dosyaya ya da belgeye DOKUNMAZ — bu bir
+              silme degil, "bunu artik takip etme" demek. */}
+          <button
+            type="button"
+            aria-label="Satırı kaldır"
+            title="Satırı kaldır"
+            onClick={onKaldir}
+            className="px-1 text-[13px] leading-none text-soluk transition-colors hover:text-govde"
           >
-            Sohbeti aç
-          </Link>
-        ) : (
-          !hata && (
-            <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-cizgi-4 border-t-gib" />
-          )
-        )}
+            ✕
+          </button>
+        </div>
       </div>
 
       {/*
-       * Ilerleme cubugu asamadan turuyor, gercek bir yuzde degil: hat adim
-       * adim ilerliyor ve sunucu ara ilerleme bildirmiyor. Yaniltmamak icin
-       * adimlar ayni araliklarla degil, surelerine yakin paylarla bolundu —
-       * en uzun bekleme "isleniyor" adimindadir.
+       * Cubuk adim adim doluyor: her adimin kendi bolmesi var ve bolme ancak
+       * o adim BITINCE doluyor. Tek parca bir cubuk yuzde bildirmek zorundaydi,
+       * sunucu ara ilerleme uretmedigi icin de o yuzde uydurmaydi; bolmeli
+       * cubuk yalnizca gercekten olan biteni gosterir.
+       *
+       * Ad, bolmenin ALTINDA duruyor: etiketler ayri bir satirda akarken hangi
+       * adin hangi bolmeye ait oldugu okunmuyordu — bolmeler farkli genislikte
+       * oldugu icin siralari da ortusmuyordu.
        */}
-      <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-yuzey">
-        <div
-          className={`h-full rounded-full transition-[width] duration-500 ease-out ${
-            hata ? "bg-uyari" : bitti ? "bg-onay" : "bg-gib"
-          }`}
-          style={{ width: `${stage.percent}%` }}
-        />
-      </div>
+      {!kayip && (
+        <div className="mt-2.5 flex gap-[3px]">
+          {adimlar.map((a) => (
+            <Step key={a.ad} adim={a} hata={hata} />
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Tek adim: ustte bolme, altinda adi. Calisan bolmede isik gezer — isin
+ * surdugunu gosterir.
+ *
+ * Bolme genisligi paya gore, ama bir ALT SINIRI var: yalnizca paya birakilsa
+ * kisa suren adimlarin (parcalama, indeksleme) alti birkac piksel kalir ve
+ * altindaki ad okunmaz olurdu. Alt sinir ADIN KENDI genisligi (max-content):
+ * hicbir adim adi kisalmaz, pay yalnizca artan genisligi paylastirir.
+ */
+function Step({ adim, hata }: { adim: UploadStepStatus; hata: boolean }) {
+  const meta = ADIMLAR[adim.ad];
+  const calisiyor = adim.durum === "calisiyor";
+  const yanlis = adim.durum === "hata" || (hata && calisiyor);
+
+  return (
+    <div
+      className="flex min-w-0 flex-col gap-[7px]"
+      style={{ flex: `${meta.pay} 1 0%`, minWidth: "max-content" }}
+      title={`${meta.ad} — ${adim.durum === "bitti" ? meta.bitti : meta.is}`}
+    >
+      <div className="h-1 overflow-hidden rounded-full bg-yuzey">
+        {adim.durum === "bitti" ? (
+          <div className="h-full w-full rounded-full bg-onay" />
+        ) : yanlis ? (
+          <div className="h-full w-full rounded-full bg-uyari" />
+        ) : calisiyor ? (
+          <div className="h-full w-2/5 animate-hat rounded-full bg-gib" />
+        ) : null}
+      </div>
+      <StepLabel adim={adim} />
+    </div>
+  );
+}
+
+/** Bolmenin altindaki ad — hangi adimin nerede oldugu yaziyla da okunsun. */
+function StepLabel({ adim }: { adim: UploadStepStatus }) {
+  const { ad } = ADIMLAR[adim.ad];
+  const ortak = "truncate text-center text-[10.5px]";
+  if (adim.durum === "bitti") return <span className={`${ortak} text-ikincil`}>✓ {ad}</span>;
+  if (adim.durum === "hata")
+    return <span className={`${ortak} font-semibold text-uyari`}>✕ {ad}</span>;
+  if (adim.durum === "calisiyor")
+    return <span className={`${ortak} font-semibold text-gib`}>{ad}</span>;
+  return <span className={`${ortak} text-soluk`}>{ad}</span>;
 }

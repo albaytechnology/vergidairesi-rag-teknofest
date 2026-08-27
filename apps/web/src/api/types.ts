@@ -135,11 +135,36 @@ export interface LetterDraftResponse {
   trace: string[];
 }
 
-export type UploadStage = "kuyrukta" | "isleniyor" | "hazir" | "hata";
+/**
+ * "kayip": sunucuda ne belge kaydi ne de kuyrukta isi var — takip edilecek bir
+ * sey kalmamis (orn. veri tabani sifirlandiktan sonra sekmede duran eski kayit).
+ * Ayri bir asama olmasinin nedeni: eskiden bu durum "kuyrukta" diye donuyor ve
+ * satir sonsuza kadar "belge okunuyor" gorunuyordu.
+ */
+export type UploadStage = "kuyrukta" | "isleniyor" | "hazir" | "hata" | "kayip";
+
+/** Hattin adimlari — ilerleme cubugu tek tek bunlardan doluyor. */
+export type UploadStep =
+  | "parse"
+  | "chunk"
+  | "kunye"
+  | "ozet"
+  | "yonlendirme"
+  | "eksik"
+  | "indeks";
+
+/** "atlandi": bu belge turunde adim hic calismaz (sohbet eki, yonetmelik metni). */
+export type StepState = "bekliyor" | "calisiyor" | "bitti" | "atlandi" | "hata";
+
+export interface UploadStepStatus {
+  ad: UploadStep;
+  durum: StepState;
+}
 
 export interface UploadStatus {
   path: string;
   asama: UploadStage;
+  adimlar: UploadStepStatus[];
   id: string | null;
   filename?: string;
   servis: string | null;

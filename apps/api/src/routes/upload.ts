@@ -1,15 +1,15 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve, extname, basename } from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { config } from "@albay/shared";
-import { getParseQueue } from "../helpers/queue.ts";
+import { getParseQueue, parseJobId } from "../helpers/queue.ts";
 
 const SUPPORTED = new Set([".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".html"]);
 
 /**
  * Evrak yukleme. Dosya diske yazilir ve parse kuyruguna eklenir; hattin geri
- * kalanini (chunk → analiz → yonlendirme → embed) worker yurutur. HTTP istegi
+ * kalanini (chunk → kunye → ozet → yonlendirme → embed) worker yurutur. HTTP istegi
  * LLM'i beklemez — arayuz durumu /api/documents uzerinden yoklar.
  */
 export async function registerUploadRoutes(app: FastifyInstance): Promise<void> {
@@ -41,7 +41,7 @@ export async function registerUploadRoutes(app: FastifyInstance): Promise<void> 
       await kuyruk.add(
         "parse",
         { path: hedef, corpus: "documents" },
-        { jobId: createHash("sha1").update(hedef).digest("hex") },
+        { jobId: parseJobId(hedef) },
       );
       eklenen.push({ path: hedef, filename: part.filename });
     }
@@ -81,7 +81,7 @@ export async function registerUploadRoutes(app: FastifyInstance): Promise<void> 
       await kuyruk.add(
         "parse",
         { path: hedef, corpus: "documents", sessionId },
-        { jobId: createHash("sha1").update(hedef).digest("hex") },
+        { jobId: parseJobId(hedef) },
       );
 
       // Belge kaydi worker tarafindan olusturulacak; yolu ile sonradan baglanir.

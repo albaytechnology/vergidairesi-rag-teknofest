@@ -32,7 +32,7 @@ export async function createRedisConnection(): Promise<Redis> {
 }
 
 /**
- * Parse sonrasi hat: chunk → analiz → yonlendirme → embed.
+ * Parse sonrasi hat: chunk → kunye → ozet → yonlendirme → embed.
  * Parse'tan ayri bir kuyruk cunku bu adimlar LLM'e bagli ve cok daha yavas;
  * ayni worker'da tutulursa Docling'in onunu tikar.
  */

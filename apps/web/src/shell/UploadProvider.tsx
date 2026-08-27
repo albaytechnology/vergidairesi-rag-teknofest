@@ -11,13 +11,13 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
-import type { UploadStage } from "../api/types.ts";
+import type { UploadStage, UploadStepStatus } from "../api/types.ts";
 
 /**
  * Yuklenen evrakin hat boyunca takibi — ROTALARIN USTUNDE.
  *
  * Yukleme istegi LLM'i beklemez: dosya diske yazilip kuyruga birakilir ve
- * parse → chunk → analiz → yonlendirme → embed adimlari arkada surer. Bu
+ * parse → chunk → kunye → ozet → yonlendirme → embed adimlari arkada surer. Bu
  * yuzden takip, yukleme ekranina bagli olamaz; calisan evragi birakip
  * servislere ya da arsive gectiginde de surmeli ve is bitince NEREDE olursa
  * olsun haber verilmeli. Durum bu yuzden App'in altinda, tek bir yerde tutulur.
@@ -30,6 +30,8 @@ export interface TrackedUpload {
   path: string;
   filename: string;
   stage: UploadStage;
+  /** Hattin adim adim durumu; ilerleme cubugu buradan doluyor. */
+  adimlar: UploadStepStatus[];
   /** Belge kaydi olustugunda dolar; sohbete gitmek icin gerekir. */
   docId: string | null;
   servis: string | null;
@@ -50,6 +52,8 @@ interface UploadContextValue {
   uploads: TrackedUpload[];
   /** Sunucuya yuklenmis dosyalari takibe alir (POST /api/upload sonrasi). */
   track: (files: { path: string; filename: string }[]) => void;
+  /** Satiri takipten dusurur — yalnizca ekrandan kalkar, belgeye dokunmaz. */
+  kaldir: (path: string) => void;
   toast: (message: Omit<ToastMessage, "id">) => void;
 }
 
@@ -68,6 +72,10 @@ const TOAST_MS = 15_000;
 /** Sonme suresi — CSS gecisiyle ayni olmali. */
 const TOAST_FADE_MS = 300;
 
+/*
+ * Yoklanmaya devam edilen kayitlar. "kayip" AKTIF DEGIL: sunucuda ne belge
+ * kaydi ne kuyrukta isi var, yoklamak yalnizca ayni cevabi tekrar getirir.
+ */
 const aktif = (u: TrackedUpload): boolean => u.stage === "kuyrukta" || u.stage === "isleniyor";
 
 export function UploadProvider({ children }: { children: ReactNode }) {
@@ -96,8 +104,18 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const track = useCallback((files: { path: string; filename: string }[]) => {
     setUploads((list) => [
       ...list.filter((u) => !files.some((f) => f.path === u.path)),
-      ...files.map((f) => ({ ...f, stage: "kuyrukta" as const, docId: null, servis: null })),
+      ...files.map((f) => ({
+        ...f,
+        stage: "kuyrukta" as const,
+        adimlar: [],
+        docId: null,
+        servis: null,
+      })),
     ]);
+  }, []);
+
+  const kaldir = useCallback((path: string) => {
+    setUploads((list) => list.filter((u) => u.path !== path));
   }, []);
 
   const bekleyenler = uploads.filter(aktif).map((u) => u.path);
@@ -117,13 +135,18 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     setUploads((list) =>
       list.map((u) => {
         const d = durumlar.find((x) => x.path === u.path);
-        return d ? { ...u, stage: d.asama, docId: d.id ?? u.docId, servis: d.servis } : u;
+        if (!d) return u;
+        const docId = d.id ?? u.docId;
+        // adimlar ?? : API'nin eski surumu bu alani gondermiyor; dev sirasinda
+        // sunucu yeniden baslatilana kadar satir cizilmeye devam etsin.
+        const adimlar = d.adimlar ?? u.adimlar;
+        return { ...u, stage: d.asama, adimlar, docId, servis: d.servis };
       }),
     );
 
     let bitenVar = false;
     for (const d of durumlar) {
-      if (d.asama !== "hazir" && d.asama !== "hata") continue;
+      if (d.asama !== "hazir" && d.asama !== "hata" && d.asama !== "kayip") continue;
       if (duyurulan.current.has(d.path)) continue;
       duyurulan.current.add(d.path);
       bitenVar = true;
@@ -135,6 +158,12 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           title: "Evrak eklendi",
           detail: d.servis ? `${ad} → ${d.servis}` : ad,
           docId: d.id,
+        });
+      } else if (d.asama === "kayip") {
+        toast({
+          tone: "hata",
+          title: "Evrak kaydı bulunamadı",
+          detail: `${ad} — kuyrukta işi yok, yeniden yükleyin`,
         });
       } else {
         toast({ tone: "hata", title: "Evrak işlenemedi", detail: ad });
@@ -159,7 +188,10 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     }
   }, [uploads]);
 
-  const value = useMemo(() => ({ uploads, track, toast }), [uploads, track, toast]);
+  const value = useMemo(
+    () => ({ uploads, track, kaldir, toast }),
+    [uploads, track, kaldir, toast],
+  );
 
   return (
     <UploadContext.Provider value={value}>
@@ -175,7 +207,13 @@ function restore(): TrackedUpload[] {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const kayitlar = JSON.parse(raw) as { path: string; filename: string }[];
-    return kayitlar.map((k) => ({ ...k, stage: "kuyrukta", docId: null, servis: null }));
+    return kayitlar.map((k) => ({
+      ...k,
+      stage: "kuyrukta" as const,
+      adimlar: [],
+      docId: null,
+      servis: null,
+    }));
   } catch {
     return [];
   }

@@ -1,5 +1,5 @@
 /**
- * Parse edilmis belgeleri hattan gecirir: chunk → analiz → servis yonlendirme → embed.
+ * Parse edilmis belgeleri hattan gecirir: chunk → kunye → ozet → servis yonlendirme → embed.
  *
  * Worker (pnpm worker) yeni gelen belgeleri zaten otomatik hattan geciriyor;
  * bu CLI, hat kurulmadan once ingest edilmis belgeleri geri doldurmak ve tek bir

@@ -15,7 +15,11 @@ export type { ChatMessage, ChatOptions } from "./ollama/types.ts";
 
 export { classifyDocument, type ClassifyInput } from "./classification/classify.ts";
 
-export { analyzeDocument, type AnalyzeInput } from "./analysis/analyze.ts";
+export {
+  extractDocumentKunye,
+  summarizeDocument,
+  type AnalyzeInput,
+} from "./analysis/analyze.ts";
 export { analyzeDocumentGaps, type GapsInput } from "./analysis/gaps.ts";
 export { groundAlacakTuru } from "./analysis/grounding.ts";
 

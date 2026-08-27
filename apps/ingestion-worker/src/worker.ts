@@ -2,7 +2,7 @@
  * Ingest worker'lari — iki asamali hat:
  *
  *   parse   : kuyruktan dosya alir, Docling ile parse eder, data/parsed/ + Postgres
- *   process : parse biten belgeyi chunk → analiz → servis yonlendirme → embed
+ *   process : parse biten belgeyi chunk → kunye → ozet → servis yonlendirme → embed
  *
  * Iki ayri kuyruk cunku process adimi LLM'e bagli ve yavas; ayni worker'da
  * olsaydi Docling'in onunu tikardi.
