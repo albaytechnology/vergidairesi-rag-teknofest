@@ -92,14 +92,31 @@ export function ReplyView() {
   /**
    * Sohbetteki karttan gelindiyse taslagi kendiliginden uret — calisan karari
    * zaten orada verdi, ayni dugmeye bir daha bastirmanin anlami yok.
-   * useRef bayragi StrictMode'un cift mount'unda ikinci bir uretim tetiklemesini
-   * engeller (uretim pahali bir LLM cagrisi).
+   *
+   * DIKKAT — uretim DOGRUDAN bu effect'in govdesinde baslatilamaz. StrictMode
+   * ilk mount'ta effect'leri kur → yik → yeniden kur seklinde calistiriyor;
+   * react-query'nin useMutation'i useSyncExternalStore ile abone oldugu icin o
+   * "yik" adiminda MutationObserver.onUnsubscribe tetikleniyor ve gozlemciyi
+   * SUREN mutasyondan cikariyor. Kutuphanede bir onSubscribe karsiligi yok,
+   * dolayisiyla ikinci kurulumda gozlemci mutasyona geri EKLENMIYOR. Sonuc:
+   * istek tamamlaniyor, mutasyon duzeyindeki onSuccess calisip taslagi
+   * ekrana basiyor, ama gozlemci "success" bildirimini hic almadigi icin
+   * isPending sonsuza kadar true kaliyor — dugme "Taslak üretiliyor…"da
+   * takiliyor ve "Kaydet (sayı ver)" devre disi kaliyordu.
+   *
+   * Bu yuzden uretim bir sonraki makrogoreve ertelenip effect yikildiginda
+   * IPTAL EDILIYOR: istegi yalnizca ayakta kalan kurulum baslatir, gozlemci de
+   * mutasyona bagli kalir. useRef bayragi ayrica gercek bir yeniden calismada
+   * (pahali LLM cagrisinin) ikinci kez tetiklenmesini engeller.
    */
   useEffect(() => {
     if (!handoff?.autoGenerate || autoStarted.current) return;
     if (isNegative && !reason.trim()) return; // gerekce eksik: calisan doldursun
-    autoStarted.current = true;
-    generate.mutate(false);
+    const timer = setTimeout(() => {
+      autoStarted.current = true;
+      generate.mutate(false);
+    }, 0);
+    return () => clearTimeout(timer);
     // Bos bagimlilik listesi bilerek: yalnizca ilk mount'ta calismali.
   }, []);
 
