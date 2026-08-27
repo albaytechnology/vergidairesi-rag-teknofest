@@ -681,3 +681,30 @@ Ollama gerektirdiği için `pnpm test`'e dahil değil, ayrı çalıştırılır.
 bırakmakla kalmaz, "checksum'dan geçmeyen numara yazılmaz" notunu gösterir; cevap
 yazısında karşılığı bulunamayan sayılar ve doldurulmamış antet alanları önizlemenin
 üstünde uyarı olarak listelenir. Sistemin bilmediği şey, bilinmiyor olarak görünür.
+
+## Lisans ve TEKNOFEST Açık Kaynak Uyum Beyanı
+
+Bu proje **[Apache License 2.0](LICENSE)** kapsamında lisanslanmıştır. Projenin kaynak kodları, veri hazırlama araçları ve dokümantasyonu ticari ve kurumsal kullanıma, incelemeye ve geliştirmeye açık kaynak olarak sunulmuştur.
+
+### TEKNOFEST Şartnamesi (Madde 7) Uyumluluğu
+
+TEKNOFEST şartnamesinin 7. maddesi gereğince, üçüncü taraf açık ağırlıklı (open-weight) yapay zekâ modelleri doğrudan kod deposunda **tutulmamakta**; modeller harici servisler (Ollama vb.) üzerinden talimatlara göre edinilmektedir. Kullanılan tüm üçüncü taraf model, bileşen ve veri kaynaklarının lisans ve erişim bilgileri aşağıda sunulmuştur:
+
+| Bileşen / Kaynak | Tür | Sağlayıcı / Proje | Sürüm / Model Adı | Lisans | Kullanım Amacı / Talimat |
+|---|---|---|---|---|---|
+| **Qwen 2.5 14B Instruct** | LLM (Dil Modeli) | Alibaba Cloud / Qwen | `qwen2.5:14b-instruct` | [Qwen License / Apache-2.0](https://github.com/QwenLM/Qwen2.5/blob/main/LICENSE) | Niyet tespiti, RAG tabanlı akıl yürütme, resmî cevap yazısı üretimi. Kurulum: `ollama pull qwen2.5:14b-instruct` |
+| **BGE-M3** | Embedding Modeli | BAAI | `bge-m3` | [MIT License](https://github.com/FlagOpen/FlagEmbedding/blob/master/LICENSE) | Çok dilli ve hibrit arama için anlamsal vektör üretimi. Kurulum: `ollama pull bge-m3` |
+| **IBM Docling** | Doküman Ayrıştırıcı | IBM DS4SD | `latest` (Docker) | [MIT License](https://github.com/DS4SD/docling/blob/main/LICENSE) | PDF ve taranmış belgelerin yapısal ayrıştırılması (OCR + Tablo). |
+| **Qdrant** | Vektör Veritabanı | Qdrant | `v1.13.0` (Docker) | [Apache License 2.0](https://github.com/qdrant/qdrant/blob/master/LICENSE) | Yoğun (dense) ve seyrek (sparse/BM25) vektör indeksleme. |
+| **PostgreSQL** | İlişkisel Veritabanı | PostgreSQL Global Dev Group | `16-alpine` (Docker) | [PostgreSQL License](https://www.postgresql.org/about/licence/) | Evrak üst verisi, oturumlar ve yönlendirme durumu. |
+| **Redis** | Kuyruk ve Önbellek | Redis / Valkey Compatible | `7-alpine` (Docker) | [RSALv2/SSPLv1 / Open Source](https://redis.io/legal/licenses/) | BullMQ ile asenkron evrak işleme iş hattı kuyruğu. |
+| **Kuruluş ve Görev Yönetmeliği** | Veri Seti / Mevzuat | T.C. Resmî Gazete | Yürürlükteki Metin | Kamuya Açık Mevzuat | Vergi Daireleri Kuruluş ve Görev Yönetmeliği (Mevzuat bilgi tabanı). |
+| **Örnek Evrak Korpusu** | Test Veri Seti | ALB-AI Takımı | Sentetik / Mock | Apache-2.0 | Gerçek mükellef bilgisi (KVKK) içermeyen sentetik test dilekçeleri. |
+
+---
+
+### Telif Hakkı (Copyright)
+
+Copyright (c) 2026 Cem Tolga Münyas, Altay Şimşek, Kadir Yıldız, Berna Albay Aksoy, ALB-AI Takımı.  
+Licensed under the Apache License, Version 2.0.
+
