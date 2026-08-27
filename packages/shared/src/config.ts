@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const EnvSchema = z.object({
   OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
-  OLLAMA_CHAT_MODEL: z.string().default("qwen2.5:14b-instruct"),
+  OLLAMA_CHAT_MODEL: z.string().default("qwen3.8:27b"),
   OLLAMA_EMBED_MODEL: z.string().default("bge-m3"),
   QDRANT_URL: z.string().url().default("http://localhost:6333"),
   QDRANT_COLLECTION: z.string().default("albay_chunks"),

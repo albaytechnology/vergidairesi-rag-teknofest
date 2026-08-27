@@ -6,7 +6,7 @@ resmî formatta cevap yazısı taslağı üreten, tamamen **on-premise (air-gapp
 multi-agent RAG sistemi.
 
 TypeScript + LangGraph.js orkestrasyon, Qdrant hybrid arama (dense + BM25), yerel
-Ollama (qwen2.5:14b-instruct + bge-m3), Fastify API ve React arayüz. Her cevap kaynak
+Ollama (qwen3.8:27b + bge-m3), Fastify API ve React arayüz. Her cevap kaynak
 atıflıdır; dayanak yoksa sistem **"bulunamadı"**, yönlendirmede net dayanak yoksa
 **"belirlenemedi — manuel inceleme gerekli"** der. Hiçbir servis adı, vergi numarası
 ya da tutar uydurulmaz.
@@ -18,7 +18,7 @@ ya da tutar uydurulmaz.
 - **Node.js 24+** — `nvm install 24`
 - **pnpm** — `corepack enable && corepack prepare pnpm@latest --activate`
 - **Docker + Docker Compose** — Colima ya da Docker Desktop
-- **Ollama sunucusu** — `qwen2.5:14b-instruct` ve `bge-m3` modelleri yüklü
+- **Ollama sunucusu** — `qwen3.8:27b` ve `bge-m3` modelleri yüklü
   (uzak makinede olabilir; adresi `.env` içinde)
 
 ### 1. Repo ve bağımlılıklar
@@ -206,7 +206,7 @@ docs/                  # parse/chunking rehberi, yonetmelik korpusu notlari
 |---|---|
 | Dil / runtime | TypeScript, Node.js, pnpm workspaces |
 | Agent orkestrasyon | LangGraph.js |
-| LLM + embedding | Ollama (uzak): qwen2.5:14b-instruct + bge-m3 |
+| LLM + embedding | Ollama (uzak): qwen3.8:27b + bge-m3 |
 | Vector DB | Qdrant — hybrid: dense (cosine) + sparse (BM25, IDF server-side) |
 | Reranker (opsiyonel) | TEI + bge-reranker-v2-m3 (x86; `--profile rerank`) |
 | Parse | Docling (Docker sidecar) — layout-aware Markdown + sayfa haritası |
@@ -558,7 +558,7 @@ baştan sona HTML-kaçışlıdır.
 Önizleme her düzenlemede yeniden üretilebildiği için orada numara tüketilseydi
 giden evrak defterinde boşluklar oluşurdu; önizleme `[SIRA NO]` gösterir.
 
-**Bilinen sınır — düzyazı kalitesi.** `qwen2.5:14b-instruct` Türkçe resmî yazı
+**Bilinen sınır — düzyazı kalitesi.** `qwen3.8:27b` Türkçe resmî yazı
 dilinde zaman zaman bozuk tamlama ve eksik diyakritik üretiyor ("mukellef",
 "dilekceniz"). Yapısal doğruluk (blok düzeni, karar–gerekçe tutarlılığı, sayısal
 dayanak) sağlanıyor; **üslup düzeltmesi insana bırakılmıştır** — arayüzdeki
@@ -692,7 +692,7 @@ TEKNOFEST şartnamesinin 7. maddesi gereğince, üçüncü taraf açık ağırl�
 
 | Bileşen / Kaynak | Tür | Sağlayıcı / Proje | Sürüm / Model Adı | Lisans | Kullanım Amacı / Talimat |
 |---|---|---|---|---|---|
-| **Qwen 2.5 14B Instruct** | LLM (Dil Modeli) | Alibaba Cloud / Qwen | `qwen2.5:14b-instruct` | [Qwen License / Apache-2.0](https://github.com/QwenLM/Qwen2.5/blob/main/LICENSE) | Niyet tespiti, RAG tabanlı akıl yürütme, resmî cevap yazısı üretimi. Kurulum: `ollama pull qwen2.5:14b-instruct` |
+| **Qwen 3.8 27B** | LLM (Dil Modeli) | Alibaba Cloud / Qwen | `qwen3.8:27b` | [Qwen License / Apache-2.0](https://github.com/QwenLM/Qwen2.5/blob/main/LICENSE) | Niyet tespiti, RAG tabanlı akıl yürütme, resmî cevap yazısı üretimi. Kurulum: `ollama pull qwen3.8:27b` |
 | **BGE-M3** | Embedding Modeli | BAAI | `bge-m3` | [MIT License](https://github.com/FlagOpen/FlagEmbedding/blob/master/LICENSE) | Çok dilli ve hibrit arama için anlamsal vektör üretimi. Kurulum: `ollama pull bge-m3` |
 | **IBM Docling** | Doküman Ayrıştırıcı | IBM DS4SD | `latest` (Docker) | [MIT License](https://github.com/DS4SD/docling/blob/main/LICENSE) | PDF ve taranmış belgelerin yapısal ayrıştırılması (OCR + Tablo). |
 | **Qdrant** | Vektör Veritabanı | Qdrant | `v1.13.0` (Docker) | [Apache License 2.0](https://github.com/qdrant/qdrant/blob/master/LICENSE) | Yoğun (dense) ve seyrek (sparse/BM25) vektör indeksleme. |
