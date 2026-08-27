@@ -20,6 +20,7 @@ export {
 export { YER_TUTUCU, type LetterAddressee } from "./model/fields.ts";
 
 export { renderLetterHtml, type RenderOptions } from "./html/render.ts";
+export { stripDraftMarks } from "./html/finalize.ts";
 export { letterToDocx } from "./docx/render.ts";
 export { htmlToPdf, type PdfOptions } from "./pdf/render.ts";
 export { isChromiumReady, closeBrowser } from "./pdf/browser.ts";

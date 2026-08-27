@@ -16,7 +16,13 @@ import {
   setLifecycleStatus,
 } from "@albay/ingestion";
 import { draftResponseLetter, isDisputeService } from "@albay/agents";
-import { buildLetterModel, htmlToPdf, letterToDocx, renderLetterHtml } from "@albay/letter";
+import {
+  buildLetterModel,
+  htmlToPdf,
+  letterToDocx,
+  renderLetterHtml,
+  stripDraftMarks,
+} from "@albay/letter";
 import { LetterDecisionSchema, LetterModelSchema } from "@albay/shared";
 
 const MuhatapSchema = z.object({
@@ -147,7 +153,9 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
       return reply.code(400).send({ error: "Gecersiz istek", detay: parsed.error.issues });
     }
     try {
-      const pdf = await htmlToPdf(parsed.data.html);
+      // PDF, is akisinin cikti adimi: onizlemedeki TASLAK filigrani ve
+      // imzasizlik uyarisi belgeye basilmaz.
+      const pdf = await htmlToPdf(stripDraftMarks(parsed.data.html));
       // Isaretleme PDF URETILDIKTEN sonra: uretim basarisizsa evrak
       // "cevaplandi" gorunmemeli.
       if (parsed.data.docId) {

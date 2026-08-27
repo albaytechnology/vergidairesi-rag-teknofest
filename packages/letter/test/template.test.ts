@@ -4,6 +4,7 @@ import type { LetterBody, LetterModel } from "@albay/shared";
 import { buildLetterModel } from "../src/model/build.ts";
 import type { KurumBilgileri } from "../src/model/institution.ts";
 import { renderLetterHtml } from "../src/html/render.ts";
+import { stripDraftMarks } from "../src/html/finalize.ts";
 import { letterToDocx } from "../src/docx/render.ts";
 
 const KURUM: KurumBilgileri = {
@@ -191,6 +192,23 @@ test("taslak damgasi ve imzasizlik uyarisi varsayilan olarak basilir", () => {
   const imzali = renderLetterHtml(kur({ taslak: false }));
   assert.equal(imzali.includes('class="filigran"'), false);
   assert.equal(/elektronik imza ile imzalanmıştır/i.test(imzali), false);
+});
+
+test("onayli cikti taslak filigranini ve imzasizlik uyarisini tasimaz", () => {
+  // Onizleme iframe'de duzenlenip geri gonderiliyor: tarayici isaretlemeyi
+  // yeniden serilestirdigi icin oznitelik sirasi degismis olabilir.
+  const tarayiciCiktisi = renderLetterHtml(kur(), { onizleme: true })
+    .replace('<div class="filigran" aria-hidden="true">', '<div aria-hidden="true" class="filigran">');
+  // Stil blogu disari alinir: kullanilmayan .filigran kurali kalabilir,
+  // onemli olan govdede basilan bir sey kalmamasi.
+  const onayli = stripDraftMarks(tarayiciCiktisi).replace(/<style>[\s\S]*?<\/style>/, "");
+  assert.equal(/class="[^"]*filigran/.test(onayli), false);
+  assert.equal(/TASLAK/.test(onayli), false);
+  assert.equal(/elektronik imza ile imzalanmamıştır/i.test(onayli), false);
+  // Yazinin kendisi eksiksiz kalmali — yalnizca iki blok dusuyor.
+  assert.match(onayli, /class="antet"/);
+  assert.match(onayli, /class="imza"/);
+  assert.match(onayli, /class="iletisim"/);
 });
 
 test("model icerigi HTML'e enjeksiyon yapamaz", () => {
