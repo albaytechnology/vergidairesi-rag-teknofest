@@ -125,7 +125,6 @@ export interface LetterModel {
 }
 
 export interface LetterDraftResponse {
-  letterId: string | null;
   model: LetterModel;
   html: string;
   body: { ilgiSatirlari: string[]; paragraflar: string[]; gerekce: string };
@@ -133,6 +132,17 @@ export interface LetterDraftResponse {
   dayanaksizSayilar: string[];
   eksikAlanlar: string[];
   trace: string[];
+}
+
+/**
+ * Kaydetme cevabi. Yazi yeniden URETILMEZ: donen model ekrana gonderilenin
+ * sayi satiri doldurulmus halidir, uyarilar ve govde aynen korunur.
+ */
+export interface LetterSaveResponse {
+  letterId: string;
+  sayiNo: number;
+  model: LetterModel;
+  html: string;
 }
 
 /**

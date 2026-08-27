@@ -18,6 +18,26 @@ export type LetterAddressee = "mukellef" | "mahkeme";
 /** Yer tutucu bicimi — sablonda vurgulanarak basilir, gozden kacmasin diye. */
 export const YER_TUTUCU = (alan: string): string => `[${alan}]`;
 
+/** Sayinin son bileseni sira numarasidir: E-<DETSIS>-<dosya plani>-<sira no>. */
+const SIRA_NO_ALANI = "SIRA NO";
+
+/**
+ * Yazi kaydedilirken yer tutucu sira numarasini gercek numarayla degistirir.
+ *
+ * Numara yalnizca kaydetme aninda uretilir; o ana kadar model "[SIRA NO]"
+ * tasir. Yaziyi bastan kurmak yerine tek alani degistirmek onemli: calisanin
+ * onizlemede yaptigi duzeltmeler ve LLM'in urettigi govde oldugu gibi kalmali,
+ * numara vermek metni yeniden yazdirmamali.
+ */
+export function siraNoYaz(sayi: string, sayiNo: number): string {
+  const yerTutucu = YER_TUTUCU(SIRA_NO_ALANI);
+  // Yer tutucu yoksa (yazi daha once numaralanmis) son bilesen degistirilir:
+  // yeniden kaydetmek yeni bir giden evrak numarasi almak demektir.
+  return sayi.includes(yerTutucu)
+    ? sayi.replace(yerTutucu, String(sayiNo))
+    : sayi.replace(/[^-]*$/u, String(sayiNo));
+}
+
 /**
  * Muhatap. Formdan gelen deger analizden gelene ustundur — adi okuyan insandir.
  * Hicbiri yoksa yer tutucu basilir: yanlis kisiye yazi cikmasindansa bos kalsin.

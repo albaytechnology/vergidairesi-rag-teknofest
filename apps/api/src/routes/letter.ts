@@ -1,7 +1,9 @@
 /**
  * Cevap yazisi uc noktalari (Faz 5c).
  *
- * Akis: taslak uret → arayuzde onizle/duzelt → PDF veya DOCX indir.
+ * Akis: taslak uret → arayuzde onizle/duzelt → (kaydet: sayi ver) → PDF veya
+ * DOCX indir. Taslak uretimi dil modelini calistirir; kaydetme calistirmaz —
+ * ekrandaki yaziya yalnizca giden evrak numarasini yazar.
  * PDF girdisi onizlemedeki SON HTML'dir (calisanin duzeltmesi kaybolmasin);
  * DOCX girdisi yapisal modeldir (Word'de duzenlenmeye devam edilecegi icin).
  */
@@ -21,6 +23,7 @@ import {
   htmlToPdf,
   letterToDocx,
   renderLetterHtml,
+  siraNoYaz,
   stripDraftMarks,
 } from "@albay/letter";
 import { LetterDecisionSchema, LetterModelSchema } from "@albay/shared";
@@ -39,8 +42,21 @@ const DraftSchema = z.object({
   muhatap: MuhatapSchema.optional(),
   ekler: z.array(z.string()).optional(),
   dagitim: z.array(z.string()).optional(),
-  /** true ise sira numarasi alinir ve yazi kaydedilir. Onizleme icin false. */
-  kaydet: z.boolean().optional(),
+});
+
+/**
+ * Kaydetme girdisi: taslak DEGIL, ekrandaki yazinin ta kendisi.
+ *
+ * Model istemciden geliyor cunku calisan onizlemede konu/ilgi/govde
+ * duzeltebiliyor; sunucu yaziyi yeniden kurarsa o duzeltmeler ve LLM'in
+ * urettigi metin kaybolur, ustelik numara vermek ikinci bir dil modeli
+ * cagrisina mal olurdu.
+ */
+const SaveSchema = z.object({
+  docId: z.string().uuid(),
+  karar: LetterDecisionSchema,
+  gerekce: z.string().optional(),
+  model: LetterModelSchema,
 });
 
 const PdfSchema = z.object({
@@ -107,13 +123,17 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
       hitap,
     });
 
-    // Sira numarasi yalnizca kaydederken tuketilir; onizleme yer tutucu gosterir.
-    const sayiNo = istek.kaydet ? await nextLetterNo() : null;
+    /*
+     * Bu uc nokta ASLA sira numarasi tuketmez: onizleme her karar/gerekce
+     * degisikliginde yeniden uretilebiliyor, numara burada alinsaydi giden
+     * evrak defterinde koca bosluklar olusurdu. Model "[SIRA NO]" tasir;
+     * gercek numara /api/response-letter/kaydet adiminda yazilir.
+     */
     const model = buildLetterModel({
       analiz,
       body: taslak.body,
       karar: istek.karar,
-      sayiNo,
+      sayiNo: null,
       muhatap: istek.muhatap,
       hitap,
       ekler: istek.ekler,
@@ -121,22 +141,7 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
     });
     const html = renderLetterHtml(model, { onizleme: true });
 
-    let letterId: string | null = null;
-    if (istek.kaydet) {
-      letterId = await saveResponseLetter({
-        documentId: doc.id,
-        decision: istek.karar,
-        decisionReason: taslak.body.gerekce || istek.gerekce || null,
-        mukellefVkn: model.muhatap.vknTckn,
-        letterNo: sayiNo,
-        sayi: model.sayi,
-        letterModel: model,
-        letterHtml: html,
-      });
-    }
-
     return {
-      letterId,
       model,
       html,
       body: taslak.body,
@@ -145,6 +150,43 @@ export async function registerLetterRoutes(app: FastifyInstance): Promise<void> 
       eksikAlanlar: model.eksikAlanlar,
       trace: taslak.trace,
     };
+  });
+
+  /**
+   * Yaziyi kaydeder ve giden evrak sira numarasini verir.
+   *
+   * Taslak uretimiyle bilerek AYRI: numara vermek metinle ilgili bir islem
+   * degil, kayit islemidir. Ayni ucta yapilsaydi calisan "kaydet" dedigi anda
+   * dil modeli yeniden calisir, ekranda okuyup onayladigi yazi baska bir
+   * metinle degisir ve elle yaptigi duzeltmeler silinirdi.
+   */
+  app.post("/api/response-letter/kaydet", async (req, reply) => {
+    const parsed = SaveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Gecersiz istek", detay: parsed.error.issues });
+    }
+    const istek = parsed.data;
+
+    const doc = await getDocumentDetail(istek.docId);
+    if (!doc) return reply.code(404).send({ error: "Belge bulunamadi" });
+
+    const sayiNo = await nextLetterNo();
+    // Degisen TEK sey sayi satiri; govde, ilgi ve konu ekrandaki haliyle kalir.
+    const model = { ...istek.model, sayi: siraNoYaz(istek.model.sayi, sayiNo) };
+    const html = renderLetterHtml(model, { onizleme: true });
+
+    const letterId = await saveResponseLetter({
+      documentId: doc.id,
+      decision: istek.karar,
+      decisionReason: istek.gerekce?.trim() || null,
+      mukellefVkn: model.muhatap.vknTckn,
+      letterNo: sayiNo,
+      sayi: model.sayi,
+      letterModel: model,
+      letterHtml: html,
+    });
+
+    return { letterId, sayiNo, model, html };
   });
 
   app.post("/api/response-letter/pdf", async (req, reply) => {

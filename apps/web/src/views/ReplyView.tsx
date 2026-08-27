@@ -50,7 +50,9 @@ export function ReplyView() {
   const [model, setModel] = useState<LetterModel | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  /** LLM'in urettigi gerekce ibaresi — kayitta forma degil buna oncelik verilir. */
+  const [draftReason, setDraftReason] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const autoStarted = useRef(false);
@@ -65,7 +67,7 @@ export function ReplyView() {
   });
 
   const generate = useMutation({
-    mutationFn: (persist: boolean) =>
+    mutationFn: () =>
       api.draftLetter({
         docId,
         karar: decision,
@@ -74,18 +76,41 @@ export function ReplyView() {
           ad: recipientName.trim() || undefined,
           tur: courtLetter ? "kurum" : recipientType,
         },
-        kaydet: persist,
       }),
-    onSuccess: (result, persist) => {
+    onSuccess: (result) => {
       setModel(result.model);
       setHtml(result.html);
+      setDraftReason(result.body.gerekce);
       setWarnings([
         ...result.dayanaksizSayilar.map(
           (s) => `Evrakta karşılığı bulunamayan sayı: "${s}" — göndermeden önce doğrulayın.`,
         ),
         ...result.eksikAlanlar.map((a) => `Yapılandırılmamış alan: ${a}`),
       ]);
-      if (persist) void qc.invalidateQueries({ queryKey: ["letters", docId] });
+    },
+  });
+
+  /**
+   * Kaydet (sayi ver) — TASLAGI YENIDEN URETMEZ.
+   *
+   * Eskiden bu dugme taslak ucunu "kaydet" bayragiyla cagiriyordu; sonucta dil
+   * modeli bastan calisiyor, calisanin okuyup onayladigi yazi baska bir metinle
+   * degisiyor ve onizlemede elle yaptigi duzeltmeler siliniyordu. Artik ekrandaki
+   * model — duzeltmeleriyle birlikte — oldugu gibi gonderilir; sunucu yalnizca
+   * giden evrak sira numarasini uretip sayi satirina yazar.
+   */
+  const save = useMutation({
+    mutationFn: () =>
+      api.saveLetter({
+        docId,
+        karar: decision,
+        gerekce: draftReason || reason.trim() || undefined,
+        model: applyEditsToModel(model!, frameRef.current?.contentDocument ?? null),
+      }),
+    onSuccess: (result) => {
+      setModel(result.model);
+      setHtml(result.html);
+      void qc.invalidateQueries({ queryKey: ["letters", docId] });
     },
   });
 
@@ -114,7 +139,7 @@ export function ReplyView() {
     if (isNegative && !reason.trim()) return; // gerekce eksik: calisan doldursun
     const timer = setTimeout(() => {
       autoStarted.current = true;
-      generate.mutate(false);
+      generate.mutate();
     }, 0);
     return () => clearTimeout(timer);
     // Bos bagimlilik listesi bilerek: yalnizca ilk mount'ta calismali.
@@ -153,7 +178,7 @@ export function ReplyView() {
   }
 
   async function downloadFile(format: "pdf" | "docx") {
-    setDownloadError(null);
+    setActionError(null);
     try {
       const filename = `cevap-yazisi-${docId.slice(0, 8)}.${format}`;
       const payload =
@@ -168,7 +193,7 @@ export function ReplyView() {
         void qc.invalidateQueries({ queryKey: ["document", docId] });
       }
     } catch (err) {
-      setDownloadError(err instanceof Error ? err.message : "İndirme başarısız");
+      setActionError(err instanceof Error ? err.message : "İndirme başarısız");
     }
   }
 
@@ -263,7 +288,7 @@ export function ReplyView() {
         <button
           type="button"
           disabled={generate.isPending || reasonMissing}
-          onClick={() => generate.mutate(false)}
+          onClick={() => generate.mutate()}
           className="w-full rounded-[11px] bg-gib p-3 text-[13.5px] font-semibold text-white transition-colors hover:bg-gib-koyu disabled:opacity-40"
         >
           {generate.isPending ? "Taslak üretiliyor…" : "Taslak üret"}
@@ -306,11 +331,11 @@ export function ReplyView() {
                   {copied ? "Kopyalandı" : "Kopyala"}
                 </SecondaryButton>
                 <SecondaryButton
-                  disabled={generate.isPending}
-                  onClick={() => generate.mutate(true)}
-                  title="Giden evrak sıra numarası alır ve yazıyı kaydeder"
+                  disabled={generate.isPending || save.isPending}
+                  onClick={() => save.mutate()}
+                  title="Yazıyı olduğu gibi kaydeder ve giden evrak sıra numarasını verir"
                 >
-                  Kaydet (sayı ver)
+                  {save.isPending ? "Kaydediliyor…" : "Kaydet (sayı ver)"}
                 </SecondaryButton>
                 <SecondaryButton onClick={() => void downloadFile("docx")}>
                   DOCX indir
@@ -361,9 +386,11 @@ export function ReplyView() {
           </div>
         )}
 
-        {downloadError && (
+        {(actionError ?? save.error) && (
           <div className="mx-auto mt-3 max-w-[720px]">
-            <WarningBox>{downloadError}</WarningBox>
+            <WarningBox>
+              {actionError ?? `Kaydedilemedi: ${(save.error as Error).message}`}
+            </WarningBox>
           </div>
         )}
       </div>

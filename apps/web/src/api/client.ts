@@ -5,6 +5,7 @@ import type {
   LetterDecision,
   LetterDraftResponse,
   LetterModel,
+  LetterSaveResponse,
   ServicesResponse,
   UploadStatus,
 } from "./types.ts";
@@ -110,9 +111,23 @@ export const api = {
     karar: LetterDecision;
     gerekce?: string;
     muhatap?: { ad?: string; tur?: "kisi" | "kurum"; adres?: string; vknTckn?: string };
-    kaydet?: boolean;
   }) =>
     request<LetterDraftResponse>("/api/response-letter", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  /**
+   * Yaziyi kaydeder ve sira numarasini verir. Taslagi yeniden uretmez; ekrandaki
+   * model oldugu gibi gonderilir ki elle yapilan duzeltmeler kayda gecsin.
+   */
+  saveLetter: (input: {
+    docId: string;
+    karar: LetterDecision;
+    gerekce?: string;
+    model: LetterModel;
+  }) =>
+    request<LetterSaveResponse>("/api/response-letter/kaydet", {
       method: "POST",
       body: JSON.stringify(input),
     }),
