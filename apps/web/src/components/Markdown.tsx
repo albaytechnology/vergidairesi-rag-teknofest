@@ -110,7 +110,13 @@ function parseBlocks(text: string): Block[] {
     }
 
     // Paragraf: bos satira ya da baska bir blogun basladigi satira kadar.
-    const paragraf: string[] = [];
+    //
+    // Ilk satir kosulsuz tuketilir. Aksi halde blokBasi'nin dogru dedigi ama
+    // yukaridaki dallardan hicbirinin almadigi bir satirda dongu ilerlemez.
+    // Akis sirasinda tam da bu oluyordu: tablo basligi gelip ayirici satir
+    // (|---|---|) henuz gelmediginde tablo dali atlaniyor, satir TABLE_ROW
+    // oldugu icin paragrafa da girmiyor, i artmiyordu -> sonsuz dongu.
+    const paragraf: string[] = [lines[i++]!];
     while (i < lines.length && lines[i]!.trim() && !blokBasi(lines[i]!)) paragraf.push(lines[i++]!);
     blocks.push({ kind: "para", lines: paragraf });
   }
